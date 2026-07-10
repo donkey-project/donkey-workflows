@@ -1,0 +1,7 @@
+# Benchmark results (environment-specific, should not be committed)
+benchmark_report.md
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class

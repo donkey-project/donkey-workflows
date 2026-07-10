@@ -1,0 +1,19 @@
+# Example Dockerfile for an application built on top of donkey-workflows.
+# Copy this as a starting point and adapt it to your own project.
+#
+# Usage:
+#   docker build -f docker/example.Dockerfile -t my-workflow-app .
+#   docker run -p 8080:8080 my-workflow-app
+
+FROM registry.access.redhat.com/ubi9/python-312-minimal:9.8-1781566867
+
+WORKDIR /app
+
+# Install donkey-workflows with the server extra
+RUN pip install --no-cache-dir "donkey-workflows[server]"
+
+# Copy your application code
+COPY . .
+
+# Run your app (replace main.py with your entrypoint)
+CMD ["python", "main.py"]

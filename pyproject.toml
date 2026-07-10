@@ -1,0 +1,133 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "donkey-workflows"
+version = "0.1.0"
+description = "High performance and flexible event-driven workflow engine."
+authors = [{ name = "Leonardo Furnielis", email = "leonardofurnielis@outlook.com" }]
+license = { text = "Apache-2.0" }
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+keywords = ["AI", "LLM", "QA", "RAG", "data", "workflows", "retrieval", "semantic-search"]
+classifiers = [
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
+]
+dependencies = [
+    "pydantic>=2.13.4,<3.0.0",
+    "donkey-instrumentation>=0.1.0,<0.2.0",
+    "donkey-toolkit>=0.1.0,<0.2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "httpx>=0.28.1,<1",
+    "pyright>=1.1.411,<1.2.0",
+    "pytest>=9.1.1,<10.0.0",
+    "pytest-asyncio>=1.4.0,<2.0.0",
+    "ruff>=0.15.20,<1.0.0",
+]
+
+server = [
+    "fastapi>=0.139.0,<1",
+    "uvicorn[standard]>=0.51.0,<1",
+]
+
+[project.urls]
+Repository = "https://github.com/donkey-project/donkey/tree/main/donkey-workflows"
+
+[tool.hatch.build.targets.sdist]
+include = ["donkey_workflows/"]
+
+[tool.hatch.build.targets.wheel]
+include = ["donkey_workflows/"]
+
+[tool.pyright]
+pythonVersion = "3.11"
+typeCheckingMode = "basic"
+reportMissingImports = "none"
+reportAttributeAccessIssue = "none"
+reportOptionalMemberAccess = "none"
+
+[tool.ruff]
+extend-exclude = ["docs"]
+target-version = "py311"
+
+[tool.ruff.lint]
+ignore = ["D417", "COM812", "E501"]
+select = [
+    "B009",
+    "B010",
+    "B011",
+    "B013",
+    "B014",
+    "C4",
+    "COM819",
+    "D201",
+    "D202",
+    "D204",
+    "D207",
+    "D208",
+    "D209",
+    "D211",
+    "D213",
+    "D214",
+    "D215",
+    "D3",
+    "D4",
+    "E",
+    "F504",
+    "F541",
+    "F632",
+    "FLY",
+    "G010",
+    "I",
+    "PERF1",
+    "PIE790",
+    "PIE794",
+    "PIE808",
+    "PIE810",
+    "PLC0414",
+    "PLE2510",
+    "PLE2512",
+    "PLE2513",
+    "PLE2514",
+    "PLE2515",
+    "PLR1711",
+    "PT001",
+    "PT003",
+    "PT006",
+    "PTH201",
+    "PYI",
+    "Q",
+    "RET501",
+    "RET502",
+    "RET503",
+    "RET504",
+    "RSE",
+    "RUF005",
+    "RUF010",
+    "RUF015",
+    "SIM101",
+    "SIM103",
+    "SIM109",
+    "SIM118",
+    "SIM2",
+    "SIM300",
+    "SIM9",
+    "TC005",
+    "TD006",
+    "TID",
+    "TRY201",
+    "W",
+]
+
+[tool.ruff.format]
+docstring-code-format = true
+docstring-code-line-length = "dynamic"
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
