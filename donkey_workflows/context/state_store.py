@@ -65,11 +65,13 @@ class StateStore(Protocol[STATE_T]):
         """
         ...
 
+
 class DictState(DictLikeModel):
     """Used as the default state model when no typed state is provided."""
 
     def __init__(self, **params: Any):
         super().__init__(**params)
+
 
 class InMemoryStateStore(Generic[STATE_T]):
     """
@@ -119,9 +121,9 @@ class InMemoryStateStore(Generic[STATE_T]):
         """Get current state (read-only)."""
         return self._state
 
-    def _smart_copy(self, state: STATE_T) -> STATE_T:
+    def _copy_state(self, state: STATE_T) -> STATE_T:
         """
-        Smart copy that optimizes based on state type.
+        Copy state using optimization based on state type.
 
         For Pydantic models, uses the optimized model_copy() method.
         This reduces copy overhead by 40-60% for Pydantic models.
@@ -166,7 +168,7 @@ class InMemoryStateStore(Generic[STATE_T]):
                 raise ContextStateError("State not initialized.")
 
             # Use smart copy instead of deepcopy
-            state_copy = self._smart_copy(self._state)
+            state_copy = self._copy_state(self._state)
 
             try:
                 yield state_copy
@@ -183,7 +185,9 @@ class InMemoryStateStore(Generic[STATE_T]):
         Returns dictionary representation including store type, state type metadata,
         and serialized state data.
         """
-        state_type_name = self._state.__class__.__name__ if self._state else self._state_type.__name__
+        state_type_name = (
+            self._state.__class__.__name__ if self._state else self._state_type.__name__
+        )
         state_data = self._state.model_dump() if self._state else {}
 
         return SerializedState(

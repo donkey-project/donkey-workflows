@@ -1,24 +1,27 @@
 <div align="center">
+  <img alt="Donkey workflows Logo" src=".github/images/logo-light.png" width="65%">
 </div>
 
 <div align="center">
-  <h3>A powerful and flexible event-driven workflow engine for Python, designed to build complex asynchronous workflows with ease.</h3>
+  <h3>High performance and flexible event-driven workflow engine, designed to build complex tasks.</h3>
 </div>
 
 <div align="center">
-  <img src="https://img.shields.io/pypi/v/donkey-workflows" alt="PyPI - Version">
   <img src="https://github.com/donkey-project/donkey-workflows/actions/workflows/test.yml/badge.svg" alt="Testing">
+  <img src="https://img.shields.io/pypi/v/donkey-workflows?style=flat&colorA=black&colorB=black" alt="PyPI - Version">
+  <a href="https://pepy.tech/projects/donkey-workflows"><img src="https://static.pepy.tech/personalized-badge/donkey-workflows?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=BLACK" alt="Downloads"></a>
+  <img src="https://img.shields.io/pypi/l/donkey-workflows?style=flat&colorA=black&colorB=black" alt="PyPI - License">
   <img
     src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json"
     alt="Ruff">
-  <img src="https://img.shields.io/pepy/dt/donkey-workflows" alt="Pepy Total Downloads">
-  <img src="https://img.shields.io/pypi/l/donkey-workflows" alt="PyPI - License">
 </div>
 
 ## Installation
 
 ```bash
 pip install donkey-workflows
+# or
+uv add donkey-workflows
 ```
 
 ## Quick Start
@@ -26,6 +29,7 @@ pip install donkey-workflows
 Here's a simple example to get you started with Donkey Workflows:
 
 ```python
+import asyncio
 from donkey_workflows import Workflow, Context, step
 from donkey_workflows.events import Event, StartEvent, StopEvent
 
@@ -37,7 +41,6 @@ class MyWorkflow(Workflow):
 
     @step(when=StartEvent)
     async def start(self, ctx: Context, ev: StartEvent) -> MessageEvent:
-        
         input_msg = ev.get("message", "")
         return MessageEvent(message=f"Processed: {input_msg}")
 
@@ -49,8 +52,9 @@ class MyWorkflow(Workflow):
 async def main():
     workflow = MyWorkflow()
     result = await workflow.run(input_msg="Hello, World!")
-
     print(result)
+
+asyncio.run(main())
 ```
 
 ## Core Concepts
@@ -90,19 +94,48 @@ async with ctx.store.edit_state() as state:
 ctx.send_event(MyEvent(...))
 ```
 
+## Server
+
+Donkey Workflows includes an optional HTTP server built on FastAPI that exposes your workflows as REST endpoints.
+
+```python
+import asyncio
+from donkey_workflows.server import WorkflowServer
+
+server = WorkflowServer()
+server.add_workflow("my-workflow", MyWorkflow())
+
+asyncio.run(server.serve(host="0.0.0.0", port=8080))
+```
+
+| Endpoint | Description |
+| :--- | :--- |
+| `GET /workflows` | List all registered workflows |
+| `POST /workflows/{id}/run` | Execute a workflow |
+
 ## Features
 
-| Feature                | Donkey Workflows     |
-| ---------------------- | ----------------------- |
-| Event-driven execution | ✅                       |
-| Fan-out (parallelism)  | ✅                       |
-| Async execution        | ✅                       |
-| Shared state           | ✅                       |
-| Event joins            | ✅                       |
-| Internal buffer        | ✅                       |
-| Declarative API        | ✅                       |
-| Observability          | ✅                       |
+<div>
+<table>
+<thead>
+  <tr>
+    <th align="left" width="300">Feature</th>
+    <th align="center" width="300">Donkey Workflows</th>
+  </tr>
+</thead>
+<tbody>
+  <tr><td>Event-driven execution</td><td align="center">✅</td></tr>
+  <tr><td>Fan-out (parallelism)</td><td align="center">✅</td></tr>
+  <tr><td>Fan-in (joining)</td><td align="center">✅</td></tr>
+  <tr><td>Async execution</td><td align="center">✅</td></tr>
+  <tr><td>Shared state</td><td align="center">✅</td></tr>
+  <tr><td>Internal buffer</td><td align="center">✅</td></tr>
+  <tr><td>Declarative API</td><td align="center">✅</td></tr>
+  <tr><td>Observability</td><td align="center">✅</td></tr>
+</tbody>
+</table>
+</div>
 
 ## License
 
-Apache License 2.0
+[Apache License 2.0](LICENSE)

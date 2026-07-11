@@ -10,11 +10,12 @@ if TYPE_CHECKING:
 
 STATE_T = TypeVar("STATE_T", bound=BaseModel)
 
-class SerializedContext(BaseModel):
 
+class SerializedContext(BaseModel):
     version: str = "1.0.0"
     kind: str = "Context"
     state: dict = Field(default_factory=dict)
+
 
 class Context(Generic[STATE_T]):
     """
@@ -128,6 +129,4 @@ class Context(Generic[STATE_T]):
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize context to dictionary."""
-        return SerializedContext(
-            state=self._store.to_dict()
-        ).model_dump()
+        return SerializedContext(state=self._store.to_dict()).model_dump()

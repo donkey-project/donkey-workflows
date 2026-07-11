@@ -22,7 +22,7 @@ def step(
     Args:
         when: The Event class or list of Event classes this step handles.
             - Single event: Step executes when that event arrives
-            - List of events: Step executes when all events are collected (join)
+            - List of events: Step executes when all events are collected (fan-in/joining)
         timeout: Optional timeout in seconds for step execution
         max_retries: Number of retry attempts on failure (default: 0)
         retry_delay: Delay in seconds between retry attempts (default: 1)
@@ -111,7 +111,7 @@ def step(
                 )
 
         # Store metadata on the function
-        f._step_metadata_ = {
+        f._step_metadata = {
             "when": events_list,
             "is_join_step": is_join_step,
             "timeout": timeout,
@@ -124,7 +124,7 @@ def step(
             return await f(*args, **kwargs)
 
         # Copy metadata to wrapper
-        wrapper._step_metadata_ = f._step_metadata_
+        wrapper._step_metadata = f._step_metadata
 
         return wrapper  # type: ignore
 
@@ -133,19 +133,19 @@ def step(
 
 def is_step_method(method: Any) -> bool:
     """Check if a method is decorated with @step."""
-    return hasattr(method, "_step_metadata_")
+    return hasattr(method, "_step_metadata")
 
 
 def get_step_event_types(method: Any) -> list[Type[Event]] | None:
     """Get the normalized list of event types that a step method handles."""
-    metadata = getattr(method, "_step_metadata_", None)
+    metadata = getattr(method, "_step_metadata", None)
     if metadata is None:
         return None
     return metadata.get("when")
 
 
 def is_join_step(method: Any) -> bool:
-    metadata = getattr(method, "_step_metadata_", None)
+    metadata = getattr(method, "_step_metadata", None)
     if metadata is None:
         return False
     return metadata.get("is_join_step", False)
@@ -160,7 +160,7 @@ def get_step_name(method: Any) -> str | None:
 
 def get_step_timeout(method: Any) -> float | None:
     """Get the timeout configuration for a step method."""
-    metadata = getattr(method, "_step_metadata_", None)
+    metadata = getattr(method, "_step_metadata", None)
     if metadata is None:
         return None
     return metadata.get("timeout")
@@ -168,7 +168,7 @@ def get_step_timeout(method: Any) -> float | None:
 
 def get_step_max_retries(method: Any) -> int:
     """Get the max retries configuration for a step method."""
-    metadata = getattr(method, "_step_metadata_", None)
+    metadata = getattr(method, "_step_metadata", None)
     if metadata is None:
         return 0
     return metadata.get("max_retries", 0)
@@ -176,7 +176,7 @@ def get_step_max_retries(method: Any) -> int:
 
 def get_step_retry_delay(method: Any) -> float:
     """Get the retry delay configuration for a step method."""
-    metadata = getattr(method, "_step_metadata_", None)
+    metadata = getattr(method, "_step_metadata", None)
     if metadata is None:
         return 1.0
     return metadata.get("retry_delay", 1.0)

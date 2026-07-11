@@ -1,4 +1,5 @@
 import inspect
+import json
 import warnings
 from typing import Any, Type, get_args, get_origin
 
@@ -6,6 +7,10 @@ from donkey_workflows.context import Context
 from donkey_workflows.context.state_store import DictState
 from donkey_workflows.decorators import (
     get_step_event_types,
+    get_step_max_retries,
+    get_step_name,
+    get_step_retry_delay,
+    get_step_timeout,
     is_join_step,
     is_step_method,
 )
@@ -108,7 +113,7 @@ class Workflow:
             cls._state_type = DictState
 
         cls._validate_single_start_step()
-        cls._warn_multiple_stop_event()
+        cls._warn_multiple_stop_events()
 
         # Detect circular dependencies in join steps
         cls._detect_circular_dependencies()
@@ -206,7 +211,7 @@ class Workflow:
             )
 
     @classmethod
-    def _warn_multiple_stop_event(cls) -> None:
+    def _warn_multiple_stop_events(cls) -> None:
         """
         Warn if multiple steps can produce StopEvent.
 
@@ -223,6 +228,115 @@ class Workflow:
                 UserWarning,
                 stacklevel=2,
             )
+
+    @classmethod
+    def export(cls, path: str | None = None) -> dict:
+        """
+        Export the workflow definition to a portable JSON-compatible dict.
+
+        Captures structure, step metadata, event schemas, and source code —
+        enough for documentation, auditing, or future reimport via from_export().
+
+        Args:
+            path: Optional file path to write the JSON (e.g. "workflow.json").
+
+        Returns:
+            dict with the complete workflow manifest.
+        """
+        from donkey_workflows.serialization.export import (
+            EventExport,
+            EventFieldExport,
+            StepExport,
+            WorkflowExport,
+        )
+
+        step_methods = [
+            (name, method)
+            for name, method in inspect.getmembers(cls, predicate=inspect.isfunction)
+            if is_step_method(method)
+        ]
+
+        steps: list[StepExport] = []
+        all_event_types: set[Type[Event]] = set()
+
+        for name, method in step_methods:
+            triggers = get_step_event_types(method) or []
+            produces = cls._extract_produced_events(method)
+
+            all_event_types.update(triggers)
+            all_event_types.update(produces)
+
+            try:
+                code = inspect.getsource(method)
+            except OSError:
+                code = None
+
+            steps.append(
+                StepExport(
+                    name=get_step_name(method) or name,
+                    triggers=[e.__name__ for e in triggers],
+                    produces=sorted(e.__name__ for e in produces),
+                    is_join=is_join_step(method),
+                    timeout=get_step_timeout(method),
+                    max_retries=get_step_max_retries(method),
+                    retry_delay=get_step_retry_delay(method),
+                    code=code,
+                )
+            )
+
+        events: dict[str, EventExport] = {}
+        for evt_cls in sorted(all_event_types, key=lambda e: e.__name__):
+            try:
+                evt_code = inspect.getsource(evt_cls)
+            except OSError:
+                evt_code = None
+
+            fields: dict[str, EventFieldExport] = {}
+            for field_name, field_info in evt_cls.model_fields.items():
+                annotation = field_info.annotation
+                type_str = (
+                    annotation.__name__
+                    if hasattr(annotation, "__name__")
+                    else str(annotation)
+                )
+                fields[field_name] = EventFieldExport(
+                    type=type_str,
+                    required=field_info.is_required(),
+                )
+
+            events[evt_cls.__name__] = EventExport(
+                code=evt_code,
+                fields=fields,
+            )
+
+        state_type = cls._state_type
+        try:
+            state_code = inspect.getsource(state_type)
+        except OSError:
+            state_code = None
+
+        cls_module = inspect.getmodule(cls)
+        try:
+            cls_code = inspect.getsource(cls)
+        except OSError:
+            cls_code = None
+
+        manifest = WorkflowExport(
+            name=cls.__name__,
+            module=cls_module.__name__ if cls_module else None,
+            description=(cls.__doc__ or "").strip(),
+            state_type=state_type.__name__,
+            state_code=state_code,
+            code=cls_code,
+            steps=steps,
+            events=events,
+        )
+
+        if path is not None:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(manifest.model_dump(), f, indent=2)
+
+        return manifest.model_dump()
 
     def get_steps_for_event(self, event: Event) -> list[tuple[str, Any]]:
         """Get all step methods that handle the given event type."""

@@ -186,7 +186,7 @@ async def benchmark_scalability() -> dict[str, Any]:
     current, peak = tracemalloc.get_traced_memory()
     tracemalloc.stop()
 
-    results["o1_simple"] = { # type: ignore
+    results["o1_simple"] = {  # type: ignore
         "complexity": "O(1)",
         "iterations": iterations,
         "avg_latency": mean(times),
