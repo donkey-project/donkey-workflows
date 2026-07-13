@@ -13,6 +13,31 @@ from donkey_workflows.serialization.export import WorkflowExport
 from donkey_workflows.workflow import Workflow
 
 
+def _resolve_dependencies(manifest: WorkflowExport, namespace: dict[str, Any]) -> None:
+    """
+    Exec the dependency import statements captured at export time into `namespace`.
+
+    Each statement is the literal `import ...` / `from ... import ...` line
+    from the original module, so aliases (`import numpy as np`) resolve
+    exactly as they did originally. If a dependency isn't installed in this
+    environment, that's a real, expected failure -- surfaced as a single
+    clear error instead of a confusing NameError once exec of the class
+    itself gets underway.
+    """
+    missing: list[str] = []
+    for stmt in manifest.dependencies.imports:
+        try:
+            exec(stmt, namespace)  # noqa: S102 — trusted export, replaying its own imports
+        except ImportError:
+            missing.append(stmt)
+
+    if missing:
+        raise WorkflowValidationError(
+            f"Cannot load workflow '{manifest.name}': missing dependencies not installed "
+            f"in this environment:\n  " + "\n  ".join(missing)
+        )
+
+
 def _build_exec_namespace(manifest: WorkflowExport) -> dict[str, Any]:
     """Build the exec namespace for reconstructing a workflow from exported source."""
     namespace: dict[str, Any] = {
@@ -26,6 +51,8 @@ def _build_exec_namespace(manifest: WorkflowExport) -> dict[str, Any]:
         "BaseModel": BaseModel,
         "Any": Any,
     }
+
+    _resolve_dependencies(manifest, namespace)
 
     # Reconstruct event classes — try original module first, then exec source
     for evt_name, evt_info in manifest.events.items():

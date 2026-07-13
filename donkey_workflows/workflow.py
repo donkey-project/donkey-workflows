@@ -244,10 +244,13 @@ class Workflow:
             dict with the complete workflow manifest.
         """
         from donkey_workflows.serialization.export import (
+            DependenciesExport,
             EventExport,
             EventFieldExport,
             StepExport,
             WorkflowExport,
+            extract_dependencies,
+            resolve_dependency_packages,
         )
 
         step_methods = [
@@ -284,12 +287,16 @@ class Workflow:
                 )
             )
 
+        dependencies: list[str] = []
+
         events: dict[str, EventExport] = {}
         for evt_cls in sorted(all_event_types, key=lambda e: e.__name__):
             try:
                 evt_code = inspect.getsource(evt_cls)
             except OSError:
                 evt_code = None
+
+            dependencies.extend(extract_dependencies(evt_cls))
 
             fields: dict[str, EventFieldExport] = {}
             for field_name, field_info in evt_cls.model_fields.items():
@@ -314,12 +321,15 @@ class Workflow:
             state_code = inspect.getsource(state_type)
         except OSError:
             state_code = None
+        dependencies.extend(extract_dependencies(state_type))
 
         cls_module = inspect.getmodule(cls)
         try:
             cls_code = inspect.getsource(cls)
         except OSError:
             cls_code = None
+        dependencies.extend(extract_dependencies(cls))
+        dependencies = list(dict.fromkeys(dependencies))
 
         manifest = WorkflowExport(
             name=cls.__name__,
@@ -330,6 +340,10 @@ class Workflow:
             code=cls_code,
             steps=steps,
             events=events,
+            dependencies=DependenciesExport(
+                imports=dependencies,
+                packages=resolve_dependency_packages(dependencies),
+            ),
         )
 
         if path is not None:
