@@ -54,13 +54,32 @@ def _build_exec_namespace(manifest: WorkflowExport) -> dict[str, Any]:
 
     _resolve_dependencies(manifest, namespace)
 
-    # Reconstruct event classes — try original module first, then exec source
-    for evt_name, evt_info in manifest.events.items():
-        if evt_name in namespace:
-            continue
+    # Reconstruct event classes — try original module first, then exec source.
+    # Export order isn't guaranteed to respect dependencies between custom events
+    # (inheritance, or one event referencing another as a field type), so retry
+    # in passes: each pass execs whatever now succeeds, until nothing is left or
+    # a full pass makes no progress (a real unresolved dependency).
+    pending = {
+        evt_name: evt_info.code
+        for evt_name, evt_info in manifest.events.items()
+        if evt_name not in namespace and evt_info.code
+    }
 
-        if evt_info.code:
-            exec(evt_info.code, namespace)  # noqa: S102 — trusted export, module unavailable
+    while pending:
+        progressed = False
+        for evt_name, code in list(pending.items()):
+            try:
+                exec(code, namespace)  # noqa: S102 — trusted export, module unavailable
+            except NameError:
+                continue
+            del pending[evt_name]
+            progressed = True
+
+        if not progressed:
+            raise WorkflowValidationError(
+                f"Cannot load workflow '{manifest.name}': unresolved dependency between "
+                f"exported event classes: {', '.join(sorted(pending))}"
+            )
 
     # Reconstruct state class — exec state code if not in namespace
     if manifest.state_type not in namespace and manifest.state_code:
