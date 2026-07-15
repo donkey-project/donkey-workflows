@@ -9,25 +9,19 @@ from donkey_workflows.context.state_store import DictState
 from donkey_workflows.decorators import step
 from donkey_workflows.events import Event, StartEvent, StopEvent
 from donkey_workflows.exceptions import WorkflowValidationError
-from donkey_workflows.serialization.export import WorkflowExport
+from donkey_workflows.serialization.schemas import WorkflowSpec
 from donkey_workflows.workflow import Workflow
 
 
-def _resolve_dependencies(manifest: WorkflowExport, namespace: dict[str, Any]) -> None:
+def _resolve_dependencies(manifest: WorkflowSpec, namespace: dict[str, Any]) -> None:
     """
-    Exec the dependency import statements captured at export time into `namespace`.
-
-    Each statement is the literal `import ...` / `from ... import ...` line
-    from the original module, so aliases (`import numpy as np`) resolve
-    exactly as they did originally. If a dependency isn't installed in this
-    environment, that's a real, expected failure -- surfaced as a single
-    clear error instead of a confusing NameError once exec of the class
-    itself gets underway.
+    Executes each import statement from ``dependencies`` into ``namespace``.
+    Missing packages raise immediately with a clear error instead of a later ``NameError``.
     """
     missing: list[str] = []
     for stmt in manifest.dependencies.imports:
         try:
-            exec(stmt, namespace)  # noqa: S102 — trusted export, replaying its own imports
+            exec(stmt, namespace) # noqa: S102 — trusted export, module unavailable
         except ImportError:
             missing.append(stmt)
 
@@ -38,8 +32,9 @@ def _resolve_dependencies(manifest: WorkflowExport, namespace: dict[str, Any]) -
         )
 
 
-def _build_exec_namespace(manifest: WorkflowExport) -> dict[str, Any]:
-    """Build the exec namespace for reconstructing a workflow from exported source."""
+def _build_exec_namespace(manifest: WorkflowSpec) -> dict[str, Any]:
+    """Builds the exec namespace used to reconstruct a workflow from exported source."""
+    
     namespace: dict[str, Any] = {
         "Workflow": Workflow,
         "step": step,
@@ -49,12 +44,11 @@ def _build_exec_namespace(manifest: WorkflowExport) -> dict[str, Any]:
         "StopEvent": StopEvent,
         "DictState": DictState,
         "BaseModel": BaseModel,
-        "Any": Any,
     }
 
     _resolve_dependencies(manifest, namespace)
 
-    # Reconstruct event classes — try original module first, then exec source.
+    # Reconstruct event classes. Try original module first, then exec source.
     # Export order isn't guaranteed to respect dependencies between custom events
     # (inheritance, or one event referencing another as a field type), so retry
     # in passes: each pass execs whatever now succeeds, until nothing is left or
@@ -81,7 +75,7 @@ def _build_exec_namespace(manifest: WorkflowExport) -> dict[str, Any]:
                 f"exported event classes: {', '.join(sorted(pending))}"
             )
 
-    # Reconstruct state class — exec state code if not in namespace
+    # Exec the exported state class source if it's not already in the namespace
     if manifest.state_type not in namespace and manifest.state_code:
         exec(manifest.state_code, namespace)  # noqa: S102 — trusted export, module unavailable
 
@@ -90,14 +84,13 @@ def _build_exec_namespace(manifest: WorkflowExport) -> dict[str, Any]:
 
 def load_from_json(source: str | dict) -> Type[Workflow]:
     """
-    Load a Workflow subclass from a previously exported JSON manifest.
+    Loads a Workflow from a JSON export (file path or dict).
 
-    Tries to import from the original module first (safe, no exec). Falls back
-    to reconstructing the workflow by executing the exported source code when
-    the original module is unavailable.
+    Tries to import from the original module first; Fallback to reconstructing
+    via ``exec`` when the module is unavailable.
 
     Args:
-        source: File path to a JSON export or a dict from Workflow.export().
+        source: File path to a JSON export or a dict from ``Workflow.export()``.
 
     Returns:
         The Workflow subclass, ready to instantiate and run.
@@ -111,9 +104,9 @@ def load_from_json(source: str | dict) -> Type[Workflow]:
     else:
         raw = dict(source)
 
-    manifest = WorkflowExport.model_validate(raw)
+    manifest = WorkflowSpec.model_validate(raw)
 
-    # Primary path: import from original module — no exec required
+    # Try importing from the original module first (no exec needed)
     if manifest.module:
         try:
             mod = importlib.import_module(manifest.module)

@@ -232,23 +232,22 @@ class Workflow:
     @classmethod
     def export(cls, path: str | None = None) -> dict:
         """
-        Export the workflow definition to a portable JSON-compatible dict.
-
-        Captures structure, step metadata, event schemas, and source code —
-        enough for documentation, auditing, or future reimport via from_export().
+        Exports the workflow definition to a JSON-compatible dict.
 
         Args:
-            path: Optional file path to write the JSON (e.g. "workflow.json").
+            path: Optional file path to write the JSON (e.g. ``"workflow.json"``).
 
         Returns:
             dict with the complete workflow manifest.
         """
-        from donkey_workflows.serialization.export import (
-            DependenciesExport,
-            EventExport,
-            EventFieldExport,
-            StepExport,
-            WorkflowExport,
+        from donkey_workflows.serialization.schemas import (
+            DependenciesSpec,
+            EventSpec,
+            EventFieldSpec,
+            StepSpec,
+            WorkflowSpec,
+        )
+        from donkey_workflows.serialization.serialization import (
             extract_dependencies,
             resolve_dependency_packages,
         )
@@ -259,7 +258,7 @@ class Workflow:
             if is_step_method(method)
         ]
 
-        steps: list[StepExport] = []
+        steps: list[StepSpec] = []
         all_event_types: set[Type[Event]] = set()
 
         for name, method in step_methods:
@@ -275,7 +274,7 @@ class Workflow:
                 code = None
 
             steps.append(
-                StepExport(
+                StepSpec(
                     name=get_step_name(method) or name,
                     triggers=[e.__name__ for e in triggers],
                     produces=sorted(e.__name__ for e in produces),
@@ -287,9 +286,25 @@ class Workflow:
                 )
             )
 
+        # Include ancestor event classes from the MRO that aren't direct step triggers/outputs
+        # but are needed by load_from_json to reconstruct subclasses that inherit from them.
+        _builtin_events: frozenset[type] = frozenset({Event, StartEvent, StopEvent})
+        ancestors: set[Type[Event]] = set()
+        for evt_cls in all_event_types:
+            for base in evt_cls.__mro__:
+                if (
+                    base not in _builtin_events
+                    and base is not object
+                    and isinstance(base, type)
+                    and issubclass(base, Event)
+                    and base not in all_event_types
+                ):
+                    ancestors.add(base)
+        all_event_types.update(ancestors)
+
         dependencies: list[str] = []
 
-        events: dict[str, EventExport] = {}
+        events: dict[str, EventSpec] = {}
         for evt_cls in sorted(all_event_types, key=lambda e: e.__name__):
             try:
                 evt_code = inspect.getsource(evt_cls)
@@ -298,7 +313,7 @@ class Workflow:
 
             dependencies.extend(extract_dependencies(evt_cls))
 
-            fields: dict[str, EventFieldExport] = {}
+            fields: dict[str, EventFieldSpec] = {}
             for field_name, field_info in evt_cls.model_fields.items():
                 annotation = field_info.annotation
                 type_str = (
@@ -306,12 +321,12 @@ class Workflow:
                     if hasattr(annotation, "__name__")
                     else str(annotation)
                 )
-                fields[field_name] = EventFieldExport(
+                fields[field_name] = EventFieldSpec(
                     type=type_str,
                     required=field_info.is_required(),
                 )
 
-            events[evt_cls.__name__] = EventExport(
+            events[evt_cls.__name__] = EventSpec(
                 code=evt_code,
                 fields=fields,
             )
@@ -331,7 +346,7 @@ class Workflow:
         dependencies.extend(extract_dependencies(cls))
         dependencies = list(dict.fromkeys(dependencies))
 
-        manifest = WorkflowExport(
+        manifest = WorkflowSpec(
             name=cls.__name__,
             module=cls_module.__name__ if cls_module else None,
             description=(cls.__doc__ or "").strip(),
@@ -340,7 +355,7 @@ class Workflow:
             code=cls_code,
             steps=steps,
             events=events,
-            dependencies=DependenciesExport(
+            dependencies=DependenciesSpec(
                 imports=dependencies,
                 packages=resolve_dependency_packages(dependencies),
             ),

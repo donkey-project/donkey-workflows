@@ -22,7 +22,6 @@ class OrderState(BaseModel):
 
 
 class OrderWorkflow(Workflow):
-    """Processes an order through validation and confirmation."""
 
     @step(when=StartEvent)
     async def validate(self, ctx: Context[OrderState], ev: StartEvent) -> OrderEvent:
