@@ -21,7 +21,7 @@ def _resolve_dependencies(manifest: WorkflowSpec, namespace: dict[str, Any]) -> 
     missing: list[str] = []
     for stmt in manifest.dependencies.imports:
         try:
-            exec(stmt, namespace) # noqa: S102 — trusted export, module unavailable
+            exec(stmt, namespace)  # noqa: S102 — trusted export, module unavailable
         except ImportError:
             missing.append(stmt)
 
@@ -34,7 +34,6 @@ def _resolve_dependencies(manifest: WorkflowSpec, namespace: dict[str, Any]) -> 
 
 def _build_exec_namespace(manifest: WorkflowSpec) -> dict[str, Any]:
     """Builds the exec namespace used to reconstruct a workflow from exported source."""
-    
     namespace: dict[str, Any] = {
         "Workflow": Workflow,
         "step": step,
@@ -82,7 +81,7 @@ def _build_exec_namespace(manifest: WorkflowSpec) -> dict[str, Any]:
     return namespace
 
 
-def load_from_json(source: str | dict) -> Type[Workflow]:
+def load_from_json(workflow: str | dict) -> Type[Workflow]:
     """
     Loads a Workflow from a JSON export (file path or dict).
 
@@ -90,7 +89,7 @@ def load_from_json(source: str | dict) -> Type[Workflow]:
     via ``exec`` when the module is unavailable.
 
     Args:
-        source: File path to a JSON export or a dict from ``Workflow.export()``.
+        workflow: File path to a JSON export or a dict from ``Workflow.export()``.
 
     Returns:
         The Workflow subclass, ready to instantiate and run.
@@ -98,11 +97,11 @@ def load_from_json(source: str | dict) -> Type[Workflow]:
     Raises:
         WorkflowValidationError: If the workflow cannot be loaded.
     """
-    if isinstance(source, str):
-        with open(source, encoding="utf-8") as f:
+    if isinstance(workflow, str):
+        with open(workflow, encoding="utf-8") as f:
             raw = json.load(f)
     else:
-        raw = dict(source)
+        raw = dict(workflow)
 
     manifest = WorkflowSpec.model_validate(raw)
 

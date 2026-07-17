@@ -1,11 +1,17 @@
 import inspect
 import json
+import uuid
 import warnings
 from typing import Any, Type, get_args, get_origin
 
 from donkey_workflows.context import Context
 from donkey_workflows.context.state_store import DictState
-from donkey_workflows.decorators import (
+from donkey_workflows.events import Event, StartEvent, StopEvent
+from donkey_workflows.exceptions import (
+    WorkflowValidationError,
+)
+from donkey_workflows.runtime.engine import WorkflowEngine
+from donkey_workflows.step_metadata import (
     get_step_event_types,
     get_step_max_retries,
     get_step_name,
@@ -14,11 +20,6 @@ from donkey_workflows.decorators import (
     is_join_step,
     is_step_method,
 )
-from donkey_workflows.events import Event, StartEvent, StopEvent
-from donkey_workflows.exceptions import (
-    WorkflowValidationError,
-)
-from donkey_workflows.runtime.engine import WorkflowEngine
 
 
 class Workflow:
@@ -235,19 +236,17 @@ class Workflow:
         Exports the workflow definition to a JSON-compatible dict.
 
         Args:
-            path: Optional file path to write the JSON (e.g. ``"workflow.json"``).
+            path: File path to write the JSON (e.g. ``"workflow.json"``).
 
         Returns:
             dict with the complete workflow manifest.
         """
-        from donkey_workflows.serialization.schemas import (
+        from donkey_workflows.serialization import (
             DependenciesSpec,
-            EventSpec,
             EventFieldSpec,
+            EventSpec,
             StepSpec,
             WorkflowSpec,
-        )
-        from donkey_workflows.serialization.serialization import (
             extract_dependencies,
             resolve_dependency_packages,
         )
@@ -347,6 +346,7 @@ class Workflow:
         dependencies = list(dict.fromkeys(dependencies))
 
         manifest = WorkflowSpec(
+            id_=str(uuid.uuid5(uuid.NAMESPACE_DNS, cls.__name__)),
             name=cls.__name__,
             module=cls_module.__name__ if cls_module else None,
             description=(cls.__doc__ or "").strip(),

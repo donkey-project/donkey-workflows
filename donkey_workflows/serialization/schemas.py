@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
 
+
 class DependencyPackageSpec(BaseModel):
     name: str
     version: str
@@ -32,7 +33,8 @@ class StepSpec(BaseModel):
 
 
 class WorkflowSpec(BaseModel):
-    version: str = "1.0.0"
+    id_: str
+    api_version: str = "v1.0"
     kind: str = "Workflow"
     name: str
     module: str | None = None

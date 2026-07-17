@@ -5,11 +5,6 @@ from typing import TYPE_CHECKING, Any
 from donkey_instrumentation import get_dispatcher
 
 from donkey_workflows.context import Context
-from donkey_workflows.decorators import (
-    get_step_max_retries,
-    get_step_retry_delay,
-    get_step_timeout,
-)
 from donkey_workflows.events import Event, StartEvent, StopEvent
 from donkey_workflows.exceptions import (
     WorkflowRuntimeError,
@@ -19,6 +14,11 @@ from donkey_workflows.runtime.event_buffer import EventBuffer
 from donkey_workflows.runtime.execution_pool import ExecutionPool
 from donkey_workflows.runtime.step_function import StepExecutor
 from donkey_workflows.schemas import WorkflowResult, WorkflowStatus
+from donkey_workflows.step_metadata import (
+    get_step_max_retries,
+    get_step_retry_delay,
+    get_step_timeout,
+)
 
 if TYPE_CHECKING:
     from donkey_workflows import Workflow

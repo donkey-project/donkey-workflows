@@ -1,4 +1,3 @@
-# Context management
 from donkey_workflows.context import Context
 from donkey_workflows.decorators import step
 from donkey_workflows.events import Event, StartEvent, StopEvent

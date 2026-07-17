@@ -22,6 +22,7 @@ class OrderState(BaseModel):
 
 
 class OrderWorkflow(Workflow):
+    """Processes an order through validation and confirmation."""
 
     @step(when=StartEvent)
     async def validate(self, ctx: Context[OrderState], ev: StartEvent) -> OrderEvent:
@@ -64,7 +65,8 @@ def test_export_returns_dict():
 
     assert isinstance(data, dict)
     for key in (
-        "version",
+        "id_",
+        "api_version",
         "kind",
         "name",
         "module",
@@ -77,7 +79,7 @@ def test_export_returns_dict():
     ):
         assert key in data, f"Missing key: {key}"
 
-    assert data["version"] == "1.0.0"
+    assert data["api_version"] == "v1.0"
     assert data["kind"] == "Workflow"
     assert data["name"] == "OrderWorkflow"
     assert (
@@ -162,7 +164,7 @@ def test_export_to_file():
             loaded = json.load(f)
 
         assert loaded["name"] == result["name"]
-        assert loaded["version"] == "1.0.0"
+        assert loaded["api_version"] == "v1.0"
         assert len(loaded["steps"]) == len(result["steps"])
     finally:
         os.unlink(tmp_path)

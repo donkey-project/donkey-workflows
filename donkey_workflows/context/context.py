@@ -12,7 +12,7 @@ STATE_T = TypeVar("STATE_T", bound=BaseModel)
 
 
 class SerializedContext(BaseModel):
-    version: str = "1.0.0"
+    api_version: str = "v1.0"
     kind: str = "Context"
     state: dict = Field(default_factory=dict)
 

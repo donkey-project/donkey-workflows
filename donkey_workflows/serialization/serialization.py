@@ -10,7 +10,9 @@ from donkey_workflows.serialization.schemas import DependencyPackageSpec
 
 def _used_names(source: str) -> set[str]:
     """Names referenced anywhere in a source snippet (best-effort, no scope resolution)."""
-    return {node.id for node in ast.walk(ast.parse(source)) if isinstance(node, ast.Name)}
+    return {
+        node.id for node in ast.walk(ast.parse(source)) if isinstance(node, ast.Name)
+    }
 
 
 def extract_dependencies(obj: Any) -> list[str]:
@@ -32,7 +34,9 @@ def extract_dependencies(obj: Any) -> list[str]:
     dependencies: list[str] = []
     for node in ast.parse(module_source).body:
         if isinstance(node, (ast.Import, ast.ImportFrom)):
-            bound_names = {(alias.asname or alias.name).split(".")[0] for alias in node.names}
+            bound_names = {
+                (alias.asname or alias.name).split(".")[0] for alias in node.names
+            }
             if bound_names & needed:
                 dependencies.append(ast.unparse(node))
 
@@ -72,7 +76,9 @@ def resolve_dependency_packages(dependencies: list[str]) -> list[DependencyPacka
 
         try:
             packages.append(
-                DependencyPackageSpec(name=module_name, version=pkg_version(dist_names[0]))
+                DependencyPackageSpec(
+                    name=module_name, version=pkg_version(dist_names[0])
+                )
             )
             seen.add(module_name)
         except PackageNotFoundError:
