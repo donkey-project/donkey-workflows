@@ -13,7 +13,9 @@ from donkey_workflows.serialization.schemas import WorkflowManifest
 from donkey_workflows.workflow import Workflow
 
 
-def _resolve_dependencies(manifest: WorkflowManifest, namespace: dict[str, Any]) -> None:
+def _resolve_dependencies(
+    manifest: WorkflowManifest, namespace: dict[str, Any]
+) -> None:
     """
     Executes each import statement from ``dependencies`` into ``namespace``.
     Missing packages raise immediately with a clear error instead of a later ``NameError``.

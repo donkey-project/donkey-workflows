@@ -23,12 +23,8 @@ class WorkflowInstance(BaseModel):
 
     model_config = {"arbitrary_types_allowed": True}
 
-    id_: str = Field(
-        ..., description="Workflow definition identifier"
-    )
-    deployment_id: str = Field(
-        ..., description="Unique deployment identifier (UUID)"
-    )
+    id_: str = Field(..., description="Workflow definition identifier")
+    deployment_id: str = Field(..., description="Unique deployment identifier (UUID)")
     name: str = Field(..., description="Deployment name")
     workflow_instance: Workflow = Field(..., description="Workflow instance")
 

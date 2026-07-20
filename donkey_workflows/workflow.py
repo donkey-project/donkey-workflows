@@ -246,8 +246,8 @@ class Workflow:
             EventFieldSpec,
             EventSpec,
             StepSpec,
-            WorkflowSpec,
             WorkflowManifest,
+            WorkflowSpec,
             extract_dependencies,
             resolve_dependency_packages,
         )
@@ -326,11 +326,13 @@ class Workflow:
                     required=field_info.is_required(),
                 )
 
-            events.append(EventSpec(
-                name=evt_cls.__name__,
-                code=evt_code,
-                fields=fields,
-            ))
+            events.append(
+                EventSpec(
+                    name=evt_cls.__name__,
+                    code=evt_code,
+                    fields=fields,
+                )
+            )
 
         state_type = cls._state_type
         try:
