@@ -64,20 +64,11 @@ def test_export_returns_dict():
     data = OrderWorkflow.export()
 
     assert isinstance(data, dict)
-    for key in (
-        "id_",
-        "api_version",
-        "kind",
-        "name",
-        "module",
-        "description",
-        "state_type",
-        "state_code",
-        "code",
-        "steps",
-        "events",
-    ):
+    for key in ("id_", "api_version", "kind", "name", "module", "description", "data"):
         assert key in data, f"Missing key: {key}"
+
+    for key in ("state_type", "state_code", "code", "steps", "events", "dependencies"):
+        assert key in data["data"], f"Missing key in data: {key}"
 
     assert data["api_version"] == "v1.0"
     assert data["kind"] == "Workflow"
@@ -89,21 +80,21 @@ def test_export_returns_dict():
 
 def test_export_steps_metadata():
     data = OrderWorkflow.export()
-    steps = {s["name"]: s for s in data["steps"]}
+    steps = {s["name"]: s for s in data["data"]["steps"]}
 
     assert set(steps) == {"validate", "confirm", "finish"}
 
     validate = steps["validate"]
-    assert validate["triggers"] == ["StartEvent"]
-    assert validate["produces"] == ["OrderEvent"]
-    assert validate["is_join"] is False
+    assert validate["inputs"] == ["StartEvent"]
+    assert validate["outputs"] == ["OrderEvent"]
+    assert validate["is_join_step"] is False
     assert validate["timeout"] is None
     assert validate["max_retries"] == 0
     assert validate["retry_delay"] == 1.0
 
     confirm = steps["confirm"]
-    assert confirm["triggers"] == ["OrderEvent"]
-    assert confirm["produces"] == ["ConfirmEvent"]
+    assert confirm["inputs"] == ["OrderEvent"]
+    assert confirm["outputs"] == ["ConfirmEvent"]
     assert confirm["timeout"] == 5.0
     assert confirm["max_retries"] == 2
     assert confirm["retry_delay"] == 0.5
@@ -112,10 +103,10 @@ def test_export_steps_metadata():
 def test_export_includes_code():
     data = OrderWorkflow.export()
 
-    assert data["code"] is not None
-    assert "class OrderWorkflow" in data["code"]
+    assert data["data"]["code"] is not None
+    assert "class OrderWorkflow" in data["data"]["code"]
 
-    steps = {s["name"]: s for s in data["steps"]}
+    steps = {s["name"]: s for s in data["data"]["steps"]}
     for step_data in steps.values():
         assert step_data["code"] is not None
         assert f"async def {step_data['name']}" in step_data["code"]
@@ -123,7 +114,7 @@ def test_export_includes_code():
 
 def test_export_events_schema():
     data = OrderWorkflow.export()
-    events = data["events"]
+    events = {e["name"]: e for e in data["data"]["events"]}
 
     assert "OrderEvent" in events
     assert "ConfirmEvent" in events
@@ -147,9 +138,9 @@ def test_export_events_schema():
 def test_export_state():
     data = OrderWorkflow.export()
 
-    assert data["state_type"] == "OrderState"
-    assert data["state_code"] is not None
-    assert "class OrderState" in data["state_code"]
+    assert data["data"]["state_type"] == "OrderState"
+    assert data["data"]["state_code"] is not None
+    assert "class OrderState" in data["data"]["state_code"]
 
 
 def test_export_to_file():
@@ -165,15 +156,15 @@ def test_export_to_file():
 
         assert loaded["name"] == result["name"]
         assert loaded["api_version"] == "v1.0"
-        assert len(loaded["steps"]) == len(result["steps"])
+        assert len(loaded["data"]["steps"]) == len(result["data"]["steps"])
     finally:
         os.unlink(tmp_path)
 
 
 def test_export_join_step():
     data = FanInWorkflow.export()
-    steps = {s["name"]: s for s in data["steps"]}
+    steps = {s["name"]: s for s in data["data"]["steps"]}
 
     join = steps["join"]
-    assert join["is_join"] is True
-    assert set(join["triggers"]) == {"BranchAEvent", "BranchBEvent"}
+    assert join["is_join_step"] is True
+    assert set(join["inputs"]) == {"BranchAEvent", "BranchBEvent"}

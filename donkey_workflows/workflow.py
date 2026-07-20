@@ -247,6 +247,7 @@ class Workflow:
             EventSpec,
             StepSpec,
             WorkflowSpec,
+            WorkflowManifest,
             extract_dependencies,
             resolve_dependency_packages,
         )
@@ -275,9 +276,9 @@ class Workflow:
             steps.append(
                 StepSpec(
                     name=get_step_name(method) or name,
-                    triggers=[e.__name__ for e in triggers],
-                    produces=sorted(e.__name__ for e in produces),
-                    is_join=is_join_step(method),
+                    inputs=[e.__name__ for e in triggers],
+                    outputs=sorted(e.__name__ for e in produces),
+                    is_join_step=is_join_step(method),
                     timeout=get_step_timeout(method),
                     max_retries=get_step_max_retries(method),
                     retry_delay=get_step_retry_delay(method),
@@ -303,7 +304,7 @@ class Workflow:
 
         dependencies: list[str] = []
 
-        events: dict[str, EventSpec] = {}
+        events: list[EventSpec] = []
         for evt_cls in sorted(all_event_types, key=lambda e: e.__name__):
             try:
                 evt_code = inspect.getsource(evt_cls)
@@ -325,10 +326,11 @@ class Workflow:
                     required=field_info.is_required(),
                 )
 
-            events[evt_cls.__name__] = EventSpec(
+            events.append(EventSpec(
+                name=evt_cls.__name__,
                 code=evt_code,
                 fields=fields,
-            )
+            ))
 
         state_type = cls._state_type
         try:
@@ -345,19 +347,21 @@ class Workflow:
         dependencies.extend(extract_dependencies(cls))
         dependencies = list(dict.fromkeys(dependencies))
 
-        manifest = WorkflowSpec(
+        manifest = WorkflowManifest(
             id_=str(uuid.uuid5(uuid.NAMESPACE_DNS, cls.__name__)),
             name=cls.__name__,
             module=cls_module.__name__ if cls_module else None,
             description=(cls.__doc__ or "").strip(),
-            state_type=state_type.__name__,
-            state_code=state_code,
-            code=cls_code,
-            steps=steps,
-            events=events,
-            dependencies=DependenciesSpec(
-                imports=dependencies,
-                packages=resolve_dependency_packages(dependencies),
+            data=WorkflowSpec(
+                state_type=state_type.__name__,
+                state_code=state_code,
+                code=cls_code,
+                steps=steps,
+                events=events,
+                dependencies=DependenciesSpec(
+                    imports=dependencies,
+                    packages=resolve_dependency_packages(dependencies),
+                ),
             ),
         )
 

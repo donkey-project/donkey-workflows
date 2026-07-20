@@ -9,17 +9,17 @@ from donkey_workflows.context.state_store import DictState
 from donkey_workflows.decorators import step
 from donkey_workflows.events import Event, StartEvent, StopEvent
 from donkey_workflows.exceptions import WorkflowValidationError
-from donkey_workflows.serialization.schemas import WorkflowSpec
+from donkey_workflows.serialization.schemas import WorkflowManifest
 from donkey_workflows.workflow import Workflow
 
 
-def _resolve_dependencies(manifest: WorkflowSpec, namespace: dict[str, Any]) -> None:
+def _resolve_dependencies(manifest: WorkflowManifest, namespace: dict[str, Any]) -> None:
     """
     Executes each import statement from ``dependencies`` into ``namespace``.
     Missing packages raise immediately with a clear error instead of a later ``NameError``.
     """
     missing: list[str] = []
-    for stmt in manifest.dependencies.imports:
+    for stmt in manifest.data.dependencies.imports:
         try:
             exec(stmt, namespace)  # noqa: S102 — trusted export, module unavailable
         except ImportError:
@@ -32,7 +32,7 @@ def _resolve_dependencies(manifest: WorkflowSpec, namespace: dict[str, Any]) -> 
         )
 
 
-def _build_exec_namespace(manifest: WorkflowSpec) -> dict[str, Any]:
+def _build_exec_namespace(manifest: WorkflowManifest) -> dict[str, Any]:
     """Builds the exec namespace used to reconstruct a workflow from exported source."""
     namespace: dict[str, Any] = {
         "Workflow": Workflow,
@@ -53,9 +53,9 @@ def _build_exec_namespace(manifest: WorkflowSpec) -> dict[str, Any]:
     # in passes: each pass execs whatever now succeeds, until nothing is left or
     # a full pass makes no progress (a real unresolved dependency).
     pending = {
-        evt_name: evt_info.code
-        for evt_name, evt_info in manifest.events.items()
-        if evt_name not in namespace and evt_info.code
+        evt_info.name: evt_info.code
+        for evt_info in manifest.data.events
+        if evt_info.name not in namespace and evt_info.code
     }
 
     while pending:
@@ -75,8 +75,8 @@ def _build_exec_namespace(manifest: WorkflowSpec) -> dict[str, Any]:
             )
 
     # Exec the exported state class source if it's not already in the namespace
-    if manifest.state_type not in namespace and manifest.state_code:
-        exec(manifest.state_code, namespace)  # noqa: S102 — trusted export, module unavailable
+    if manifest.data.state_type not in namespace and manifest.data.state_code:
+        exec(manifest.data.state_code, namespace)  # noqa: S102 — trusted export, module unavailable
 
     return namespace
 
@@ -103,7 +103,7 @@ def load_from_json(workflow: str | dict) -> Type[Workflow]:
     else:
         raw = dict(workflow)
 
-    manifest = WorkflowSpec.model_validate(raw)
+    manifest = WorkflowManifest.model_validate(raw)
 
     # Try importing from the original module first (no exec needed)
     if manifest.module:
@@ -116,14 +116,14 @@ def load_from_json(workflow: str | dict) -> Type[Workflow]:
             pass
 
     # Fallback: reconstruct from exported code
-    if not manifest.code:
+    if not manifest.data.code:
         raise WorkflowValidationError(
             f"Cannot load workflow '{manifest.name}': module '{manifest.module}' is not available "
             "and no code was found in the export."
         )
 
     namespace = _build_exec_namespace(manifest)
-    exec(manifest.code, namespace)  # noqa: S102 — trusted export, module unavailable
+    exec(manifest.data.code, namespace)  # noqa: S102 — trusted export, module unavailable
 
     workflow_cls = namespace.get(manifest.name)
     if not (isinstance(workflow_cls, type) and issubclass(workflow_cls, Workflow)):

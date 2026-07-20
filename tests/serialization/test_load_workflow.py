@@ -96,7 +96,7 @@ def test_load_raises_when_no_code_and_no_module():
     """Raises WorkflowValidationError when module is missing and code is absent."""
     data = OrderWorkflow.export()
     data["module"] = "non.existent.module"
-    data["code"] = None
+    data["data"]["code"] = None
 
     with pytest.raises(WorkflowValidationError, match="Cannot load workflow"):
         load_from_json(data)
@@ -134,7 +134,7 @@ def test_load_raises_clear_error_for_missing_dependency():
     """A dependency captured at export time but absent at load time fails clearly, not with NameError."""
     data = OrderWorkflow.export()
     data["module"] = "non.existent.module"
-    data["dependencies"] = {
+    data["data"]["dependencies"] = {
         "imports": ["import totally_not_installed_lib_xyz as tnil"],
         "packages": [],
     }
@@ -166,7 +166,8 @@ class InheritanceWorkflow(Workflow):
 def test_export_includes_ancestor_only_event():
     """ZBaseEvent must appear in the manifest even though it is never a direct trigger/produces."""
     data = InheritanceWorkflow.export()
-    assert "ZBaseEvent" in data["events"], (
+    event_names = {e["name"] for e in data["data"]["events"]}
+    assert "ZBaseEvent" in event_names, (
         "ZBaseEvent is an ancestor of ABaseEvent but was not captured in the manifest"
     )
 

@@ -8,6 +8,7 @@ from donkey_workflows.serialization.schemas import (
     EventSpec,
     StepSpec,
     WorkflowSpec,
+    WorkflowManifest,
 )
 from donkey_workflows.serialization.serialization import (
     extract_dependencies,
@@ -15,6 +16,7 @@ from donkey_workflows.serialization.serialization import (
 )
 
 __all__ = [
+    "WorkflowManifest",
     "WorkflowSpec",
     "StepSpec",
     "EventSpec",
