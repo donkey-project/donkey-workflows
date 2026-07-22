@@ -78,13 +78,11 @@ async def client(server):
 
 
 @pytest.mark.asyncio
-async def test_registry_track_workflow(test_workflow):
+async def test_registry_add_workflow(test_workflow):
     """Test workflow registration."""
     registry = WorkflowRegistry()
 
-    deployment_id = await registry.track_workflow(
-        name="test_workflow", workflow=test_workflow
-    )
+    deployment_id = await registry.add(name="test_workflow", workflow=test_workflow)
 
     assert isinstance(deployment_id, str)
 
@@ -100,13 +98,9 @@ async def test_registry_track_duplicate_replaces(test_workflow):
     """Test that registering duplicate workflow name replaces the old one."""
     registry = WorkflowRegistry()
 
-    deployment_id1 = await registry.track_workflow(
-        name="duplicate", workflow=test_workflow
-    )
+    deployment_id1 = await registry.add(name="duplicate", workflow=test_workflow)
 
-    deployment_id2 = await registry.track_workflow(
-        name="duplicate", workflow=test_workflow
-    )
+    deployment_id2 = await registry.add(name="duplicate", workflow=test_workflow)
 
     assert deployment_id1 == deployment_id2
 
@@ -119,7 +113,7 @@ async def test_registry_get_workflow(test_workflow):
     """Test retrieving registered workflows."""
     registry = WorkflowRegistry()
 
-    deployment_id = await registry.track_workflow("test", test_workflow)
+    deployment_id = await registry.add("test", test_workflow)
     instance = await registry.get(deployment_id)
 
     assert instance.id_ == str(uuid.uuid5(uuid.NAMESPACE_DNS, "TestWorkflow"))
@@ -155,8 +149,8 @@ async def test_registry_list(test_workflow, complex_workflow):
     """Test listing registered workflows."""
     registry = WorkflowRegistry()
 
-    id1 = await registry.track_workflow("workflow1", test_workflow)
-    id2 = await registry.track_workflow("workflow2", complex_workflow)
+    id1 = await registry.add("workflow1", test_workflow)
+    id2 = await registry.add("workflow2", complex_workflow)
 
     workflows = await registry.list()
 
@@ -178,7 +172,7 @@ async def test_registry_thread_safety(test_workflow):
 
     async def register_workflow(name: str):
         """Helper to register a workflow."""
-        return await registry.track_workflow(name, test_workflow)
+        return await registry.add(name, test_workflow)
 
     tasks = [register_workflow(f"workflow_{i}") for i in range(10)]
 

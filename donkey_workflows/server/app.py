@@ -36,7 +36,7 @@ class WorkflowServer(FastAPI):
         Register a workflow with the server (synchronous method).
 
         Args:
-            name: The deploy alias (e.g. "workflow_prod", "workflow_dev").
+            name: The deployment name (e.g. "workflow_prod", "workflow_dev").
             workflow: The workflow instance to register.
 
         Returns:
@@ -46,7 +46,7 @@ class WorkflowServer(FastAPI):
         asyncio.set_event_loop(loop)
         try:
             deployment_id = loop.run_until_complete(
-                self._registered_workflows.track_workflow(name, workflow)
+                self._registered_workflows.add(name, workflow)
             )
         finally:
             loop.close()

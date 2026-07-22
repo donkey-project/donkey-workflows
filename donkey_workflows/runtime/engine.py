@@ -241,7 +241,7 @@ class WorkflowEngine:
 
         This method finds all step methods that listen to the event type and
         submits them as independent tasks. Single-event steps are dispatched
-        immediately. Fan-in steps buffer events and are dispatched when all
+        immediately. Join steps buffer events and are dispatched when all
         required events are collected.
 
         Args:

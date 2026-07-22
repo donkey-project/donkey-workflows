@@ -1,4 +1,5 @@
-from typing import Any, Type
+import inspect
+from typing import Any, Type, get_args, get_origin
 
 from donkey_workflows.events import Event
 
@@ -52,3 +53,26 @@ def get_step_retry_delay(method: Any) -> float:
     if metadata is None:
         return 1.0
     return metadata.get("retry_delay", 1.0)
+
+
+def get_step_produced_events(method: Any) -> set[Type[Event]]:
+    """Extract event types produced by a step method from its return annotation."""
+    produced_events: set[Type[Event]] = set()
+    sig = inspect.signature(method)
+    return_annotation = sig.return_annotation
+
+    if return_annotation != inspect.Parameter.empty:
+        origin = get_origin(return_annotation)
+        if origin is not None:
+            # Handle Union types (Event | None)
+            args = get_args(return_annotation)
+            for arg in args:
+                if isinstance(arg, type) and issubclass(arg, Event):
+                    produced_events.add(arg)
+        elif isinstance(return_annotation, type) and issubclass(
+            return_annotation, Event
+        ):
+            # Direct Event type
+            produced_events.add(return_annotation)
+
+    return produced_events

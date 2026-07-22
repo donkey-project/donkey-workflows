@@ -15,6 +15,7 @@ from donkey_workflows.step_metadata import (
     get_step_event_types,
     get_step_max_retries,
     get_step_name,
+    get_step_produced_events,
     get_step_retry_delay,
     get_step_timeout,
     is_join_step,
@@ -120,36 +121,13 @@ class Workflow:
         cls._detect_circular_dependencies()
 
     @classmethod
-    def _extract_produced_events(cls, method) -> set[Type[Event]]:
-        """Extract event types produced by a step method from its return annotation."""
-        produced_events: set[Type[Event]] = set()
-        sig = inspect.signature(method)
-        return_annotation = sig.return_annotation
-
-        if return_annotation != inspect.Parameter.empty:
-            origin = get_origin(return_annotation)
-            if origin is not None:
-                # Handle Union types (Event | None)
-                args = get_args(return_annotation)
-                for arg in args:
-                    if isinstance(arg, type) and issubclass(arg, Event):
-                        produced_events.add(arg)
-            elif isinstance(return_annotation, type) and issubclass(
-                return_annotation, Event
-            ):
-                # Direct Event type
-                produced_events.add(return_annotation)
-
-        return produced_events
-
-    @classmethod
     def _build_event_producers_map(cls) -> dict[Type[Event], list[str]]:
         """Build a map of event types to the step names that produce them."""
         event_producers: dict[Type[Event], list[str]] = {}
 
         for name, method in inspect.getmembers(cls, predicate=inspect.isfunction):
             if is_step_method(method):
-                produced_events = cls._extract_produced_events(method)
+                produced_events = get_step_produced_events(method)
                 for event_type in produced_events:
                     if event_type not in event_producers:
                         event_producers[event_type] = []
@@ -175,7 +153,7 @@ class Workflow:
         # Check each join step for circular dependencies
         for step_name, required_events in cls._join_step_registry.items():
             step_method = getattr(cls, step_name)
-            produced_events = cls._extract_produced_events(step_method)
+            produced_events = get_step_produced_events(step_method)
 
             # Check if any required event creates a circular dependency
             for required_event in required_events:
@@ -259,14 +237,14 @@ class Workflow:
         ]
 
         steps: list[StepSpec] = []
-        all_event_types: set[Type[Event]] = set()
+        event_types: set[Type[Event]] = set()
 
         for name, method in step_methods:
             triggers = get_step_event_types(method) or []
-            produces = cls._extract_produced_events(method)
+            produces = get_step_produced_events(method)
 
-            all_event_types.update(triggers)
-            all_event_types.update(produces)
+            event_types.update(triggers)
+            event_types.update(produces)
 
             try:
                 code = inspect.getsource(method)
@@ -290,22 +268,22 @@ class Workflow:
         # but are needed by load_from_json to reconstruct subclasses that inherit from them.
         _builtin_events: frozenset[type] = frozenset({Event, StartEvent, StopEvent})
         ancestors: set[Type[Event]] = set()
-        for evt_cls in all_event_types:
+        for evt_cls in event_types:
             for base in evt_cls.__mro__:
                 if (
                     base not in _builtin_events
                     and base is not object
                     and isinstance(base, type)
                     and issubclass(base, Event)
-                    and base not in all_event_types
+                    and base not in event_types
                 ):
                     ancestors.add(base)
-        all_event_types.update(ancestors)
+        event_types.update(ancestors)
 
         dependencies: list[str] = []
 
         events: list[EventSpec] = []
-        for evt_cls in sorted(all_event_types, key=lambda e: e.__name__):
+        for evt_cls in sorted(event_types, key=lambda e: e.__name__):
             try:
                 evt_code = inspect.getsource(evt_cls)
             except OSError:

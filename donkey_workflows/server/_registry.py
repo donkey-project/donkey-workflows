@@ -15,18 +15,18 @@ class WorkflowInstance(BaseModel):
     server's registry to manage and execute workflows.
 
     Attributes:
-        id_: Stable workflow identifier definition across different deployments.
-        deployment_id: Unique identifier derived from the deploy name (UUID v5).
+        id_: Stable workflow identifier definitions.
+        deployment_id: Unique deployment identifier (UUID).
         name: The deployment name (e.g. "workflow_prod", "workflow_dev").
-        workflow_instance: The actual workflow instance.
+        workflow_instance: The workflow instance.
     """
 
     model_config = {"arbitrary_types_allowed": True}
 
-    id_: str = Field(..., description="Workflow definition identifier")
+    id_: str = Field(..., description="Stable workflow identifier definition")
     deployment_id: str = Field(..., description="Unique deployment identifier (UUID)")
-    name: str = Field(..., description="Deployment name")
-    workflow_instance: Workflow = Field(..., description="Workflow instance")
+    name: str = Field(..., description="The deployment name")
+    workflow_instance: Workflow = Field(..., description="The workflow instance")
 
 
 class WorkflowRegistry:
@@ -41,9 +41,9 @@ class WorkflowRegistry:
         self._workflows: dict[str, WorkflowInstance] = {}
         self._lock = asyncio.Lock()
 
-    async def track_workflow(self, name: str, workflow: Workflow) -> str:
+    async def add(self, name: str, workflow: Workflow) -> str:
         """
-        Track a workflow instance at launch time.
+        Add a workflow instance at launch time.
 
         The deployment_id is derived deterministically from the deploy name,
         so registering the same name twice replaces the previous deployment.

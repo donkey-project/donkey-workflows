@@ -22,7 +22,7 @@ def step(
     Args:
         when: The Event class or list of Event classes this step handles.
             - Single event: Step executes when that event arrives
-            - List of events: Step executes when all events are collected (fan-in/joining)
+            - List of events: Step executes when all events are collected (join/merge)
         timeout: Optional timeout in seconds for step execution
         max_retries: Number of retry attempts on failure (default: 0)
         retry_delay: Delay in seconds between retry attempts (default: 1)
