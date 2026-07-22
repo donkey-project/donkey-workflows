@@ -1,7 +1,10 @@
 import pytest
 
 from donkey_workflows.context import Context
-from donkey_workflows.decorators import (
+from donkey_workflows.decorators import step
+from donkey_workflows.events import Event, StartEvent, StopEvent
+from donkey_workflows.exceptions import WorkflowValidationError
+from donkey_workflows.step_metadata import (
     get_step_event_types,
     get_step_max_retries,
     get_step_name,
@@ -9,10 +12,7 @@ from donkey_workflows.decorators import (
     get_step_timeout,
     is_join_step,
     is_step_method,
-    step,
 )
-from donkey_workflows.events import Event, StartEvent, StopEvent
-from donkey_workflows.exceptions import WorkflowValidationError
 
 
 class EventA(Event):

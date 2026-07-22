@@ -1,4 +1,5 @@
 import asyncio
+import uuid
 
 import pytest
 import pytest_asyncio
@@ -7,7 +8,7 @@ from httpx import AsyncClient
 from donkey_workflows import Context, Workflow, step
 from donkey_workflows.events import StartEvent, StopEvent
 from donkey_workflows.server import WorkflowNotFoundError, WorkflowServer
-from donkey_workflows.server._registry import WorkflowRegistry, generate_workflow_id
+from donkey_workflows.server._registry import WorkflowRegistry
 
 
 @pytest.fixture
@@ -77,45 +78,17 @@ async def client(server):
 
 
 @pytest.mark.asyncio
-async def test_generate_workflow_id_consistency():
-    """Test that generate_workflow_id produces consistent IDs."""
-    workflow_name = "test_workflow"
-
-    id1 = generate_workflow_id(workflow_name)
-    id2 = generate_workflow_id(workflow_name)
-    id3 = generate_workflow_id(workflow_name)
-
-    assert id1 == id2 == id3
-    assert isinstance(id1, str)
-
-    different_id = generate_workflow_id("different_workflow")
-    assert different_id != id1
-
-
-@pytest.mark.asyncio
-async def test_generate_workflow_id_is_uuid_v5():
-    """Test that generated IDs are valid UUID v5 strings."""
-    workflow_id = generate_workflow_id("test")
-
-    from uuid import UUID
-
-    uuid_obj = UUID(workflow_id)
-    assert uuid_obj.version == 5
-
-
-@pytest.mark.asyncio
-async def test_registry_track_workflow(test_workflow):
+async def test_registry_add_workflow(test_workflow):
     """Test workflow registration."""
     registry = WorkflowRegistry()
 
-    workflow_id = await registry.track_workflow(
-        name="test_workflow", workflow=test_workflow
-    )
+    deployment_id = await registry.add(name="test_workflow", workflow=test_workflow)
 
-    assert isinstance(workflow_id, str)
+    assert isinstance(deployment_id, str)
 
-    instance = await registry.get(workflow_id)
-    assert instance.id_ == workflow_id
+    instance = await registry.get(deployment_id)
+    assert instance.id_ == str(uuid.uuid5(uuid.NAMESPACE_DNS, "TestWorkflow"))
+    assert instance.deployment_id == deployment_id
     assert instance.name == "test_workflow"
     assert instance.workflow_instance == test_workflow
 
@@ -125,17 +98,13 @@ async def test_registry_track_duplicate_replaces(test_workflow):
     """Test that registering duplicate workflow name replaces the old one."""
     registry = WorkflowRegistry()
 
-    workflow_id1 = await registry.track_workflow(
-        name="duplicate", workflow=test_workflow
-    )
+    deployment_id1 = await registry.add(name="duplicate", workflow=test_workflow)
 
-    workflow_id2 = await registry.track_workflow(
-        name="duplicate", workflow=test_workflow
-    )
+    deployment_id2 = await registry.add(name="duplicate", workflow=test_workflow)
 
-    assert workflow_id1 == workflow_id2
+    assert deployment_id1 == deployment_id2
 
-    instance = await registry.get(workflow_id1)
+    instance = await registry.get(deployment_id1)
     assert instance.name == "duplicate"
 
 
@@ -144,10 +113,11 @@ async def test_registry_get_workflow(test_workflow):
     """Test retrieving registered workflows."""
     registry = WorkflowRegistry()
 
-    workflow_id = await registry.track_workflow("test", test_workflow)
-    instance = await registry.get(workflow_id)
+    deployment_id = await registry.add("test", test_workflow)
+    instance = await registry.get(deployment_id)
 
-    assert instance.id_ == workflow_id
+    assert instance.id_ == str(uuid.uuid5(uuid.NAMESPACE_DNS, "TestWorkflow"))
+    assert instance.deployment_id == deployment_id
     assert instance.name == "test"
     assert instance.workflow_instance == test_workflow
 
@@ -179,16 +149,16 @@ async def test_registry_list(test_workflow, complex_workflow):
     """Test listing registered workflows."""
     registry = WorkflowRegistry()
 
-    id1 = await registry.track_workflow("workflow1", test_workflow)
-    id2 = await registry.track_workflow("workflow2", complex_workflow)
+    id1 = await registry.add("workflow1", test_workflow)
+    id2 = await registry.add("workflow2", complex_workflow)
 
     workflows = await registry.list()
 
     assert len(workflows) == 2
 
-    workflow_ids = {w.id_ for w in workflows}
-    assert id1 in workflow_ids
-    assert id2 in workflow_ids
+    deployment_ids = {w.deployment_id for w in workflows}
+    assert id1 in deployment_ids
+    assert id2 in deployment_ids
 
     names = {w.name for w in workflows}
     assert "workflow1" in names
@@ -202,7 +172,7 @@ async def test_registry_thread_safety(test_workflow):
 
     async def register_workflow(name: str):
         """Helper to register a workflow."""
-        return await registry.track_workflow(name, test_workflow)
+        return await registry.add(name, test_workflow)
 
     tasks = [register_workflow(f"workflow_{i}") for i in range(10)]
 
@@ -243,7 +213,7 @@ async def test_list_workflows_with_registered(server, client, test_workflow):
     assert len(data["workflows"]) == 1
 
     workflow_info = data["workflows"][0]
-    assert workflow_info["id_"] == str(workflow_id)
+    assert workflow_info["deployment_id"] == str(workflow_id)
     assert workflow_info["name"] == "test_workflow"
 
 
@@ -413,7 +383,7 @@ async def test_complete_workflow_lifecycle(server, client, test_workflow):
     assert list_response.status_code == 200
     workflows = list_response.json()["workflows"]
     assert len(workflows) == 1
-    assert workflows[0]["id_"] == str(workflow_id)
+    assert workflows[0]["deployment_id"] == str(workflow_id)
     assert workflows[0]["name"] == "lifecycle_test"
 
     run_response = await client.post(
@@ -496,8 +466,8 @@ async def test_concurrent_workflow_executions(server, client, test_workflow):
 
 
 @pytest.mark.asyncio
-async def test_workflow_id_deterministic_across_servers(test_workflow):
-    """Test that workflow IDs are deterministic across different server instances."""
+async def test_workflow_deployment_id_deterministic_across_servers(test_workflow):
+    """Test that deployment IDs are deterministic across different server instances."""
     server1 = WorkflowServer()
     server2 = WorkflowServer()
 
@@ -510,13 +480,13 @@ async def test_workflow_id_deterministic_across_servers(test_workflow):
 @pytest.mark.asyncio
 async def test_server_add_workflow_returns_uuid(server, test_workflow):
     """Test that add_workflow returns a valid UUID."""
-    workflow_id = await asyncio.to_thread(server.add_workflow, "test", test_workflow)
+    deployment_id = await asyncio.to_thread(server.add_workflow, "test", test_workflow)
 
-    assert isinstance(workflow_id, str)
+    assert isinstance(deployment_id, str)
 
     from uuid import UUID
 
-    uuid_obj = UUID(workflow_id)
+    uuid_obj = UUID(deployment_id)
     assert uuid_obj.version == 5
 
 
@@ -535,5 +505,5 @@ async def test_workflow_metadata_persistence(server, client, test_workflow):
     assert len(workflows) == 1
     workflow_info = workflows[0]
 
-    assert workflow_info["id_"] == str(workflow_id)
+    assert workflow_info["deployment_id"] == str(workflow_id)
     assert workflow_info["name"] == "metadata_test"

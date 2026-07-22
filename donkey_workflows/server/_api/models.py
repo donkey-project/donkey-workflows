@@ -9,13 +9,15 @@ class WorkflowMetadata(BaseModel):
     Workflow metadata.
 
     Attributes:
-        id_: Unique workflow identifier.
-        name: The workflow name.
+        id_: Workflow definition identifier (UUID v5 of class name).
+        deployment_id: Unique deployment identifier (UUID v5 of deploy name).
+        name: The deployment alias.
         description: Optional workflow description.
     """
 
-    id_: str = Field(..., description="Unique workflow identifier")
-    name: str = Field(..., description="Workflow name")
+    id_: str = Field(..., description="Workflow definition identifier")
+    deployment_id: str = Field(..., description="Unique deployment identifier")
+    name: str = Field(..., description="Deployment alias")
     description: str | None = Field(None, description="Workflow description")
 
 

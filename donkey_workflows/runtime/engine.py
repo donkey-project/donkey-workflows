@@ -1,33 +1,24 @@
 import asyncio
-import inspect
 import uuid
-from collections import OrderedDict
 from typing import TYPE_CHECKING, Any
 
 from donkey_instrumentation import get_dispatcher
-from donkey_instrumentation.span import active_span_id
-from donkey_toolkit.retry import (
-    retry,
-    retry_if_exception,
-    stop_after_attempt,
-    wait_fixed,
-)
 
 from donkey_workflows.context import Context
-from donkey_workflows.decorators import (
-    get_step_max_retries,
-    get_step_retry_delay,
-    get_step_timeout,
-)
 from donkey_workflows.events import Event, StartEvent, StopEvent
 from donkey_workflows.exceptions import (
     WorkflowRuntimeError,
-    WorkflowTimeoutError,
     WorkflowValidationError,
 )
 from donkey_workflows.runtime.event_buffer import EventBuffer
 from donkey_workflows.runtime.execution_pool import ExecutionPool
+from donkey_workflows.runtime.step_function import StepExecutor
 from donkey_workflows.schemas import WorkflowResult, WorkflowStatus
+from donkey_workflows.step_metadata import (
+    get_step_max_retries,
+    get_step_retry_delay,
+    get_step_timeout,
+)
 
 if TYPE_CHECKING:
     from donkey_workflows import Workflow
@@ -87,6 +78,12 @@ class WorkflowEngine:
         self._join_lock = asyncio.Lock()
         # Queue for task exceptions
         self._exception_queue: asyncio.Queue[Exception] = asyncio.Queue()
+        self._step_executor = StepExecutor(
+            exception_queue=self._exception_queue,
+            event_buffer=self._event_buffer,
+            pool=self._pool,
+            workflow=self._workflow,
+        )
 
     async def run(
         self,
@@ -117,14 +114,14 @@ class WorkflowEngine:
 
         @_dispatcher.span
         async def _run():
-            return await self._control_loop_run(start_events, ctx)
+            return await self._run_control_loop(start_events, ctx)
 
         _run.__name__ = "run"
         _run.__qualname__ = "Workflow.run"
 
         return await _run()
 
-    async def _control_loop_run(
+    async def _run_control_loop(
         self,
         start_events: list[StartEvent] | StartEvent,
         ctx: Context | None = None,
@@ -305,16 +302,19 @@ class WorkflowEngine:
             retry_delay = get_step_retry_delay(step_method)
 
             # Submit step as independent task
-            task_coro = self._run_step_task(
+            task_coro = self._run_step_with_cleanup(
                 step_name,
-                step_method,
-                self._workflow,
-                context,
-                event_or_events,
-                step_timeout,
-                max_retries,
-                retry_delay,
-                is_join_step=is_join_step,
+                is_join_step,
+                self._step_executor.run(
+                    step_name,
+                    step_method,
+                    context,
+                    event_or_events,
+                    step_timeout,
+                    max_retries,
+                    retry_delay,
+                    is_join_step=is_join_step,
+                ),
             )
             task = await self._pool.create_task(
                 task_coro, task_name=f"step:{step_name}"
@@ -326,174 +326,19 @@ class WorkflowEngine:
                     await self._pool.shutdown()
                     raise exc
 
-    async def _run_step_task(
+    async def _run_step_with_cleanup(
         self,
         step_name: str,
-        step_method: Any,
-        workflow: Any,
-        context: Context,
-        event_or_events: Event | dict[type, Event],
-        timeout: float | None,
-        max_retries: int,
-        retry_delay: float,
-        is_join_step: bool = False,
+        is_join_step: bool,
+        coro,
     ) -> None:
-        """
-        Execute a step as an independent task with immediate event emission.
-
-        This method wraps step execution with retry/timeout logic and emits
-        downstream events immediately upon completion, without waiting for
-        sibling steps.
-
-        Args:
-            step_name: Name of the step.
-            step_method: The step method to execute.
-            workflow: The workflow instance.
-            context: The Context for step execution.
-            event_or_events: Single Event or dict of event types to Event instances.
-            timeout: Optional timeout in seconds for step execution.
-            max_retries: Number of retry attempts on failure.
-            retry_delay: Delay in seconds between retry attempts.
-            is_join_step: Whether this is a join step.
-        """
+        """Wrap a step task coroutine to clean up the join step scheduling marker on completion."""
         try:
-            result = await self._step_worker(
-                step_name=step_name,
-                step_method=step_method,
-                workflow=workflow,
-                context=context,
-                event_or_events=event_or_events,
-                timeout=timeout,
-                max_retries=max_retries,
-                retry_delay=retry_delay,
-            )
-
-            # Clear buffer after successful join step execution
-            if is_join_step:
-                await self._event_buffer.clear_events(step_name)
-
-            # Emit downstream immediately if step returned event
-            if result is not None:
-                if isinstance(result, Event):
-                    await context.send_event(result)
-                else:
-                    raise WorkflowRuntimeError(
-                        f"Step '{step_name}' expected Event, got {type(result).__name__}. "
-                        "Steps must return a single Event or None."
-                    )
-        except asyncio.TimeoutError as e:
-            if is_join_step:
-                # Clear buffer on failure for join steps
-                await self._event_buffer.clear_events(step_name)
-
-                required_events = self._workflow._join_step_registry.get(
-                    step_name, set()
-                )
-                event_names = [et.__name__ for et in required_events]
-
-                error = WorkflowTimeoutError(
-                    f"Step '{step_name}' execution timeout after {timeout}s "
-                )
-            else:
-                error = WorkflowTimeoutError(
-                    f"Step '{step_name}' execution timeout after {timeout}s"
-                )
-
-            await self._exception_queue.put(error)
-            raise error from e
-        except Exception as e:
-            # Clear buffer on failure for join steps
-            if is_join_step:
-                await self._event_buffer.clear_events(step_name)
-
-            await self._exception_queue.put(e)
+            await coro
         finally:
-            # Clean up join step scheduling marker
             if is_join_step:
                 async with self._join_lock:
                     self._scheduled_join_steps.discard(step_name)
-
-    async def _step_worker(
-        self,
-        step_name: str,
-        step_method: Any,
-        workflow: Any,
-        context: Context,
-        event_or_events: Event | dict[type, Event],
-        timeout: float | None,
-        max_retries: int,
-        retry_delay: float,
-    ) -> Event | None:
-        """
-        Execute a step with timeout, applying retry decorator dynamically.
-
-        This method applies retry logic based on the step's configuration
-        (max_retries and retry_delay). Each step execution is instrumented.
-        """
-        bound_args = inspect.BoundArguments(
-            signature=inspect.Signature(parameters=[]),
-            arguments=OrderedDict(
-                [
-                    ("event_or_events", event_or_events),
-                    ("context", context),
-                ]
-            ),
-        )
-
-        cls_name = self._workflow.__class__.__name__
-        span_id = f"{cls_name}.{step_name}-{uuid.uuid4()}"
-        parent_span_id = active_span_id.get()
-        span_token = active_span_id.set(span_id)
-
-        _dispatcher.span_start(
-            id_=span_id,
-            bound_args=bound_args,
-            instance=workflow,
-            parent_id=parent_span_id,
-        )
-
-        try:
-
-            @retry(
-                stop=stop_after_attempt(max_retries + 1),
-                wait=wait_fixed(retry_delay),
-                when=retry_if_exception(),
-                reraise=True,
-            )
-            async def execute():
-                if timeout is not None:
-                    return await asyncio.wait_for(
-                        self._pool.run_coroutine(
-                            step_method(workflow, context, event_or_events)
-                        ),
-                        timeout=timeout,
-                    )
-                else:
-                    return await self._pool.run_coroutine(
-                        step_method(workflow, context, event_or_events)
-                    )
-
-            result = await execute()  # type: ignore[misc]
-
-            _dispatcher.span_end(
-                id_=span_id,
-                bound_args=bound_args,
-                instance=workflow,
-                result=result,
-            )
-
-            return result
-
-        except Exception as e:
-            _dispatcher.span_exception(
-                id_=span_id,
-                bound_args=bound_args,  # type: ignore
-                instance=workflow,
-                err=e,
-            )
-            raise
-        finally:
-            active_span_id.reset(span_token)
 
     def _check_buffer_size(self) -> None:
         """

@@ -1,19 +1,26 @@
 import inspect
+import json
+import uuid
 import warnings
 from typing import Any, Type, get_args, get_origin
 
 from donkey_workflows.context import Context
 from donkey_workflows.context.state_store import DictState
-from donkey_workflows.decorators import (
-    get_step_event_types,
-    is_join_step,
-    is_step_method,
-)
 from donkey_workflows.events import Event, StartEvent, StopEvent
 from donkey_workflows.exceptions import (
     WorkflowValidationError,
 )
 from donkey_workflows.runtime.engine import WorkflowEngine
+from donkey_workflows.step_metadata import (
+    get_step_event_types,
+    get_step_max_retries,
+    get_step_name,
+    get_step_produced_events,
+    get_step_retry_delay,
+    get_step_timeout,
+    is_join_step,
+    is_step_method,
+)
 
 
 class Workflow:
@@ -108,33 +115,10 @@ class Workflow:
             cls._state_type = DictState
 
         cls._validate_single_start_step()
-        cls._warn_multiple_stop_event()
+        cls._warn_multiple_stop_events()
 
         # Detect circular dependencies in join steps
         cls._detect_circular_dependencies()
-
-    @classmethod
-    def _extract_produced_events(cls, method) -> set[Type[Event]]:
-        """Extract event types produced by a step method from its return annotation."""
-        produced_events: set[Type[Event]] = set()
-        sig = inspect.signature(method)
-        return_annotation = sig.return_annotation
-
-        if return_annotation != inspect.Parameter.empty:
-            origin = get_origin(return_annotation)
-            if origin is not None:
-                # Handle Union types (Event | None)
-                args = get_args(return_annotation)
-                for arg in args:
-                    if isinstance(arg, type) and issubclass(arg, Event):
-                        produced_events.add(arg)
-            elif isinstance(return_annotation, type) and issubclass(
-                return_annotation, Event
-            ):
-                # Direct Event type
-                produced_events.add(return_annotation)
-
-        return produced_events
 
     @classmethod
     def _build_event_producers_map(cls) -> dict[Type[Event], list[str]]:
@@ -143,7 +127,7 @@ class Workflow:
 
         for name, method in inspect.getmembers(cls, predicate=inspect.isfunction):
             if is_step_method(method):
-                produced_events = cls._extract_produced_events(method)
+                produced_events = get_step_produced_events(method)
                 for event_type in produced_events:
                     if event_type not in event_producers:
                         event_producers[event_type] = []
@@ -169,7 +153,7 @@ class Workflow:
         # Check each join step for circular dependencies
         for step_name, required_events in cls._join_step_registry.items():
             step_method = getattr(cls, step_name)
-            produced_events = cls._extract_produced_events(step_method)
+            produced_events = get_step_produced_events(step_method)
 
             # Check if any required event creates a circular dependency
             for required_event in required_events:
@@ -206,7 +190,7 @@ class Workflow:
             )
 
     @classmethod
-    def _warn_multiple_stop_event(cls) -> None:
+    def _warn_multiple_stop_events(cls) -> None:
         """
         Warn if multiple steps can produce StopEvent.
 
@@ -223,6 +207,149 @@ class Workflow:
                 UserWarning,
                 stacklevel=2,
             )
+
+    @classmethod
+    def export(cls, path: str | None = None) -> dict:
+        """
+        Exports the workflow definition to a JSON-compatible dict.
+
+        Args:
+            path: File path to write the JSON (e.g. ``"workflow.json"``).
+
+        Returns:
+            dict with the complete workflow manifest.
+        """
+        from donkey_workflows.serialization import (
+            DependenciesSpec,
+            EventFieldSpec,
+            EventSpec,
+            StepSpec,
+            WorkflowManifest,
+            WorkflowSpec,
+            extract_dependencies,
+            resolve_dependency_packages,
+        )
+
+        step_methods = [
+            (name, method)
+            for name, method in inspect.getmembers(cls, predicate=inspect.isfunction)
+            if is_step_method(method)
+        ]
+
+        steps: list[StepSpec] = []
+        event_types: set[Type[Event]] = set()
+
+        for name, method in step_methods:
+            triggers = get_step_event_types(method) or []
+            produces = get_step_produced_events(method)
+
+            event_types.update(triggers)
+            event_types.update(produces)
+
+            try:
+                code = inspect.getsource(method)
+            except OSError:
+                code = None
+
+            steps.append(
+                StepSpec(
+                    name=get_step_name(method) or name,
+                    inputs=[e.__name__ for e in triggers],
+                    outputs=sorted(e.__name__ for e in produces),
+                    is_join_step=is_join_step(method),
+                    timeout=get_step_timeout(method),
+                    max_retries=get_step_max_retries(method),
+                    retry_delay=get_step_retry_delay(method),
+                    code=code,
+                )
+            )
+
+        # Include ancestor event classes from the MRO that aren't direct step triggers/outputs
+        # but are needed by load_from_json to reconstruct subclasses that inherit from them.
+        _builtin_events: frozenset[type] = frozenset({Event, StartEvent, StopEvent})
+        ancestors: set[Type[Event]] = set()
+        for evt_cls in event_types:
+            for base in evt_cls.__mro__:
+                if (
+                    base not in _builtin_events
+                    and base is not object
+                    and isinstance(base, type)
+                    and issubclass(base, Event)
+                    and base not in event_types
+                ):
+                    ancestors.add(base)
+        event_types.update(ancestors)
+
+        dependencies: list[str] = []
+
+        events: list[EventSpec] = []
+        for evt_cls in sorted(event_types, key=lambda e: e.__name__):
+            try:
+                evt_code = inspect.getsource(evt_cls)
+            except OSError:
+                evt_code = None
+
+            dependencies.extend(extract_dependencies(evt_cls))
+
+            fields: dict[str, EventFieldSpec] = {}
+            for field_name, field_info in evt_cls.model_fields.items():
+                annotation = field_info.annotation
+                type_str = (
+                    annotation.__name__
+                    if hasattr(annotation, "__name__")
+                    else str(annotation)
+                )
+                fields[field_name] = EventFieldSpec(
+                    type=type_str,
+                    required=field_info.is_required(),
+                )
+
+            events.append(
+                EventSpec(
+                    name=evt_cls.__name__,
+                    code=evt_code,
+                    fields=fields,
+                )
+            )
+
+        state_type = cls._state_type
+        try:
+            state_code = inspect.getsource(state_type)
+        except OSError:
+            state_code = None
+        dependencies.extend(extract_dependencies(state_type))
+
+        cls_module = inspect.getmodule(cls)
+        try:
+            cls_code = inspect.getsource(cls)
+        except OSError:
+            cls_code = None
+        dependencies.extend(extract_dependencies(cls))
+        dependencies = list(dict.fromkeys(dependencies))
+
+        manifest = WorkflowManifest(
+            id_=str(uuid.uuid5(uuid.NAMESPACE_DNS, cls.__name__)),
+            name=cls.__name__,
+            module=cls_module.__name__ if cls_module else None,
+            description=(cls.__doc__ or "").strip(),
+            data=WorkflowSpec(
+                state_type=state_type.__name__,
+                state_code=state_code,
+                code=cls_code,
+                steps=steps,
+                events=events,
+                dependencies=DependenciesSpec(
+                    imports=dependencies,
+                    packages=resolve_dependency_packages(dependencies),
+                ),
+            ),
+        )
+
+        if path is not None:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(manifest.model_dump(), f, indent=2)
+
+        return manifest.model_dump()
 
     def get_steps_for_event(self, event: Event) -> list[tuple[str, Any]]:
         """Get all step methods that handle the given event type."""

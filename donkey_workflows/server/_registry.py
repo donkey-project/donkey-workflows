@@ -7,19 +7,6 @@ from donkey_workflows.server.exceptions import WorkflowNotFoundError
 from donkey_workflows.workflow import Workflow
 
 
-def generate_workflow_id(workflow_name: str) -> str:
-    """
-    Generate a deterministic UUID v5 from a workflow name.
-
-    Uses a fixed namespace to ensure the same workflow name always
-    generates the same UUID across different server instances.
-
-    Args:
-        workflow_name: The name of the workflow.
-    """
-    return str(uuid.uuid5(uuid.NAMESPACE_DNS, workflow_name))
-
-
 class WorkflowInstance(BaseModel):
     """
     Internal workflow registration for in-memory execution.
@@ -28,16 +15,18 @@ class WorkflowInstance(BaseModel):
     server's registry to manage and execute workflows.
 
     Attributes:
-        id_: Unique workflow identifier.
-        name: The workflow name.
-        workflow_instance: The actual workflow instance.
+        id_: Stable workflow identifier definitions.
+        deployment_id: Unique deployment identifier (UUID).
+        name: The deployment name (e.g. "workflow_prod", "workflow_dev").
+        workflow_instance: The workflow instance.
     """
 
     model_config = {"arbitrary_types_allowed": True}
 
-    id_: str = Field(..., description="Unique workflow identifier")
-    name: str = Field(..., description="Workflow name")
-    workflow_instance: Workflow = Field(..., description="Workflow instance")
+    id_: str = Field(..., description="Stable workflow identifier definition")
+    deployment_id: str = Field(..., description="Unique deployment identifier (UUID)")
+    name: str = Field(..., description="The deployment name")
+    workflow_instance: Workflow = Field(..., description="The workflow instance")
 
 
 class WorkflowRegistry:
@@ -52,40 +41,45 @@ class WorkflowRegistry:
         self._workflows: dict[str, WorkflowInstance] = {}
         self._lock = asyncio.Lock()
 
-    async def track_workflow(self, name: str, workflow: Workflow) -> str:
+    async def add(self, name: str, workflow: Workflow) -> str:
         """
-        Track a workflow instance at launch time.
+        Add a workflow instance at launch time.
 
-        If a workflow with the same name already exists, it will be replaced.
+        The deployment_id is derived deterministically from the deploy name,
+        so registering the same name twice replaces the previous deployment.
+        Different names always produce different deployment_ids, allowing
+        multiple deployments of the same workflow class (e.g. prod/dev).
 
         Args:
-            name: The workflow name.
+            name: The deploy name (e.g. "workflow_prod", "workflow_dev").
             workflow: The workflow instance to register.
         """
-        workflow_id = generate_workflow_id(name)
+        id_ = str(uuid.uuid5(uuid.NAMESPACE_DNS, workflow.__class__.__name__))
+        deployment_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, name))
 
         async with self._lock:
-            self._workflows[workflow_id] = WorkflowInstance(
-                id_=workflow_id,
+            self._workflows[deployment_id] = WorkflowInstance(
+                id_=id_,
+                deployment_id=deployment_id,
                 name=name,
                 workflow_instance=workflow,
             )
 
-        return workflow_id
+        return deployment_id
 
-    async def get(self, workflow_id: str) -> WorkflowInstance:
+    async def get(self, deployment_id: str) -> WorkflowInstance:
         """
-        Get a workflow by its ID.
+        Get a workflow by its deployment_id.
 
         Args:
-            workflow_id: The ID of the workflow to retrieve.
+            deployment_id: The deployment_id to retrieve.
         """
         async with self._lock:
-            if workflow_id not in self._workflows:
+            if deployment_id not in self._workflows:
                 raise WorkflowNotFoundError(
-                    f"The specified workflow '{workflow_id}' could not be found"
+                    f"The specified deployment '{deployment_id}' could not be found"
                 )
-            return self._workflows[workflow_id]
+            return self._workflows[deployment_id]
 
     async def list(self) -> list[WorkflowInstance]:
         """

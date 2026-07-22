@@ -25,6 +25,7 @@ def setup_routes(app):
         workflow_infos = [
             WorkflowMetadata(
                 id_=wf.id_,
+                deployment_id=wf.deployment_id,
                 name=wf.name,
                 description=None,
             )
