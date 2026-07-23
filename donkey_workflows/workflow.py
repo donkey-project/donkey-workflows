@@ -219,8 +219,8 @@ class Workflow:
             DependenciesSpec,
             WorkflowManifest,
             WorkflowSpec,
-            collect_steps,
             collect_events,
+            collect_steps,
             compute_checksum,
             extract_imports,
             resolve_packages,
@@ -241,11 +241,11 @@ class Workflow:
         except OSError:
             cls_code = None
 
-        imports = list(dict.fromkeys(
-            event_deps
-            + extract_imports(state_type)
-            + extract_imports(cls)
-        ))
+        imports = list(
+            dict.fromkeys(
+                event_deps + extract_imports(state_type) + extract_imports(cls)
+            )
+        )
 
         manifest = WorkflowManifest(
             id_=str(uuid.uuid5(uuid.NAMESPACE_DNS, cls.__name__)),

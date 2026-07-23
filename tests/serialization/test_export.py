@@ -64,7 +64,16 @@ def test_export_returns_dict():
     data = OrderWorkflow.export()
 
     assert isinstance(data, dict)
-    for key in ("id_", "api_version", "kind", "name", "module", "description", "checksum", "data"):
+    for key in (
+        "id_",
+        "api_version",
+        "kind",
+        "name",
+        "module",
+        "description",
+        "checksum",
+        "data",
+    ):
         assert key in data, f"Missing key: {key}"
 
     assert data["checksum"] is not None
