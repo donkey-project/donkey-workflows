@@ -1,9 +1,7 @@
 <div align="center">
-  <img alt="Donkey workflows Logo" src=".github/images/logo-light.png" width="65%">
-</div>
-
-<div align="center">
-  <h3>High performance and flexible event-driven workflow engine, designed to build complex tasks.</h3>
+  <img alt="Donkey Logo" src=".github/images/favicon.png" width="80px">
+  <h2>Donkey Workflows</h2>
+  <p><strong>High performance and flexible event-driven workflow engine, designed to build complex tasks.</strong></p>
 </div>
 
 <div align="center">
@@ -16,15 +14,42 @@
     alt="Ruff">
 </div>
 
-## Installation
+## ✨ Highlight features
+
+<div>
+<table>
+<thead>
+  <tr>
+    <th align="left" width="300">Feature</th>
+    <th align="center" width="300">Donkey Workflows</th>
+  </tr>
+</thead>
+<tbody>
+  <tr><td>Event-driven execution</td><td align="center">✅</td></tr>
+  <tr><td>Fan-out (parallelism)</td><td align="center">✅</td></tr>
+  <tr><td>Fan-in (joining)</td><td align="center">✅</td></tr>
+  <tr><td>Async execution</td><td align="center">✅</td></tr>
+  <tr><td>Shared state</td><td align="center">✅</td></tr>
+  <tr><td>Internal buffer</td><td align="center">✅</td></tr>
+  <tr><td>Declarative API</td><td align="center">✅</td></tr>
+  <tr><td>Observability</td><td align="center">✅</td></tr>
+</tbody>
+</table>
+</div>
+
+## 📦 Installation
 
 ```bash
 pip install donkey-workflows
-# or
+```
+
+With [uv](https://docs.astral.sh/uv/):
+
+```bash
 uv add donkey-workflows
 ```
 
-## Quick Start
+## 🚀 Quickstart
 
 Here's a simple example to get you started with Donkey Workflows:
 
@@ -112,29 +137,6 @@ asyncio.run(server.serve(host="0.0.0.0", port=8080))
 | :--- | :--- |
 | `GET /workflows` | List all registered workflows |
 | `POST /workflows/{id}/run` | Execute a workflow |
-
-## Features
-
-<div>
-<table>
-<thead>
-  <tr>
-    <th align="left" width="300">Feature</th>
-    <th align="center" width="300">Donkey Workflows</th>
-  </tr>
-</thead>
-<tbody>
-  <tr><td>Event-driven execution</td><td align="center">✅</td></tr>
-  <tr><td>Fan-out (parallelism)</td><td align="center">✅</td></tr>
-  <tr><td>Fan-in (joining)</td><td align="center">✅</td></tr>
-  <tr><td>Async execution</td><td align="center">✅</td></tr>
-  <tr><td>Shared state</td><td align="center">✅</td></tr>
-  <tr><td>Internal buffer</td><td align="center">✅</td></tr>
-  <tr><td>Declarative API</td><td align="center">✅</td></tr>
-  <tr><td>Observability</td><td align="center">✅</td></tr>
-</tbody>
-</table>
-</div>
 
 ## License
 
