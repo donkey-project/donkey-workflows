@@ -16,7 +16,7 @@
 
 ## ✨ Highlight features
 
-- **Event-driven execution** — Steps communicate through typed events, making workflows composable and easy to reason about.
+- **Event-driven execution** — Steps communicate through typed events.
 - **Fan-out / Fan-in** — Emit multiple events in parallel and join results back, with full async support.
 - **Shared state** — Pass data across steps via a built-in `Context` object without global variables.
 - **Internal buffer** — Events are queued internally, so steps can produce and consume at their own pace.
