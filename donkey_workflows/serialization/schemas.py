@@ -24,6 +24,7 @@ class EventSpec(BaseModel):
 
 class StepSpec(BaseModel):
     name: str
+    description: str = ""
     inputs: list[str]
     outputs: list[str]
     is_join_step: bool

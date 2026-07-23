@@ -12,6 +12,7 @@ from donkey_workflows.exceptions import (
 )
 from donkey_workflows.runtime.engine import WorkflowEngine
 from donkey_workflows.step_metadata import (
+    get_step_description,
     get_step_event_types,
     get_step_max_retries,
     get_step_name,
@@ -254,6 +255,7 @@ class Workflow:
             steps.append(
                 StepSpec(
                     name=get_step_name(method) or name,
+                    description=get_step_description(method),
                     inputs=[e.__name__ for e in triggers],
                     outputs=sorted(e.__name__ for e in produces),
                     is_join_step=is_join_step(method),

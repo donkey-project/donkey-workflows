@@ -20,7 +20,7 @@
 - **Fan-out / Fan-in** — Emit multiple events in parallel and join results back, with full async support.
 - **Shared state** — Pass data across steps via a built-in `Context` object without global variables.
 - **Internal buffer** — Events are queued internally, so steps can produce and consume at their own pace.
-- **Declarative API** — Define steps with a simple `@step` decorator and let the engine handle orchestration.
+- **Declarative API** — Define steps with a simple `@step` decorator.
 - **Built-in observability** — Instrument workflows with OpenTelemetry-compatible tracing and custom metrics.
 
 ## 📦 Installation
