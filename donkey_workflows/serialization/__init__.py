@@ -11,8 +11,11 @@ from donkey_workflows.serialization.schemas import (
     WorkflowSpec,
 )
 from donkey_workflows.serialization.serialization import (
-    extract_dependencies,
-    resolve_dependency_packages,
+    collect_events,
+    collect_steps,
+    compute_checksum,
+    extract_imports,
+    resolve_packages,
 )
 
 __all__ = [
@@ -23,7 +26,10 @@ __all__ = [
     "EventFieldSpec",
     "DependenciesSpec",
     "DependencyPackageSpec",
-    "extract_dependencies",
-    "resolve_dependency_packages",
+    "collect_steps",
+    "collect_events",
+    "compute_checksum",
+    "extract_imports",
+    "resolve_packages",
     "load_from_json",
 ]

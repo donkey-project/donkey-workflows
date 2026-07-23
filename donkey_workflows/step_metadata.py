@@ -76,3 +76,8 @@ def get_step_produced_events(method: Any) -> set[Type[Event]]:
             produced_events.add(return_annotation)
 
     return produced_events
+
+
+def get_step_description(method: Any) -> str:
+    """Get the description of a step method from its docstring."""
+    return (method.__doc__ or "").strip()

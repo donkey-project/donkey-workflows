@@ -16,26 +16,12 @@
 
 ## ✨ Highlight features
 
-<div>
-<table>
-<thead>
-  <tr>
-    <th align="left" width="300">Feature</th>
-    <th align="center" width="300">Donkey Workflows</th>
-  </tr>
-</thead>
-<tbody>
-  <tr><td>Event-driven execution</td><td align="center">✅</td></tr>
-  <tr><td>Fan-out (parallelism)</td><td align="center">✅</td></tr>
-  <tr><td>Fan-in (joining)</td><td align="center">✅</td></tr>
-  <tr><td>Async execution</td><td align="center">✅</td></tr>
-  <tr><td>Shared state</td><td align="center">✅</td></tr>
-  <tr><td>Internal buffer</td><td align="center">✅</td></tr>
-  <tr><td>Declarative API</td><td align="center">✅</td></tr>
-  <tr><td>Observability</td><td align="center">✅</td></tr>
-</tbody>
-</table>
-</div>
+- **Event-driven execution** — Steps communicate through typed events.
+- **Fan-out / Fan-in** — Emit multiple events in parallel and join results back, with full async support.
+- **Shared state** — Pass data across steps via a built-in `Context` object without global variables.
+- **Internal buffer** — Events are queued internally, so steps can produce and consume at their own pace.
+- **Declarative API** — Define steps with a simple `@step` decorator.
+- **Built-in observability** — Instrument workflows with OpenTelemetry-compatible tracing and custom metrics.
 
 ## 📦 Installation
 

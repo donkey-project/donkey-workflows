@@ -13,11 +13,7 @@ from donkey_workflows.exceptions import (
 from donkey_workflows.runtime.engine import WorkflowEngine
 from donkey_workflows.step_metadata import (
     get_step_event_types,
-    get_step_max_retries,
-    get_step_name,
     get_step_produced_events,
-    get_step_retry_delay,
-    get_step_timeout,
     is_join_step,
     is_step_method,
 )
@@ -221,111 +217,35 @@ class Workflow:
         """
         from donkey_workflows.serialization import (
             DependenciesSpec,
-            EventFieldSpec,
-            EventSpec,
-            StepSpec,
             WorkflowManifest,
             WorkflowSpec,
-            extract_dependencies,
-            resolve_dependency_packages,
+            collect_events,
+            collect_steps,
+            compute_checksum,
+            extract_imports,
+            resolve_packages,
         )
 
-        step_methods = [
-            (name, method)
-            for name, method in inspect.getmembers(cls, predicate=inspect.isfunction)
-            if is_step_method(method)
-        ]
-
-        steps: list[StepSpec] = []
-        event_types: set[Type[Event]] = set()
-
-        for name, method in step_methods:
-            triggers = get_step_event_types(method) or []
-            produces = get_step_produced_events(method)
-
-            event_types.update(triggers)
-            event_types.update(produces)
-
-            try:
-                code = inspect.getsource(method)
-            except OSError:
-                code = None
-
-            steps.append(
-                StepSpec(
-                    name=get_step_name(method) or name,
-                    inputs=[e.__name__ for e in triggers],
-                    outputs=sorted(e.__name__ for e in produces),
-                    is_join_step=is_join_step(method),
-                    timeout=get_step_timeout(method),
-                    max_retries=get_step_max_retries(method),
-                    retry_delay=get_step_retry_delay(method),
-                    code=code,
-                )
-            )
-
-        # Include ancestor event classes from the MRO that aren't direct step triggers/outputs
-        # but are needed by load_from_json to reconstruct subclasses that inherit from them.
-        _builtin_events: frozenset[type] = frozenset({Event, StartEvent, StopEvent})
-        ancestors: set[Type[Event]] = set()
-        for evt_cls in event_types:
-            for base in evt_cls.__mro__:
-                if (
-                    base not in _builtin_events
-                    and base is not object
-                    and isinstance(base, type)
-                    and issubclass(base, Event)
-                    and base not in event_types
-                ):
-                    ancestors.add(base)
-        event_types.update(ancestors)
-
-        dependencies: list[str] = []
-
-        events: list[EventSpec] = []
-        for evt_cls in sorted(event_types, key=lambda e: e.__name__):
-            try:
-                evt_code = inspect.getsource(evt_cls)
-            except OSError:
-                evt_code = None
-
-            dependencies.extend(extract_dependencies(evt_cls))
-
-            fields: dict[str, EventFieldSpec] = {}
-            for field_name, field_info in evt_cls.model_fields.items():
-                annotation = field_info.annotation
-                type_str = (
-                    annotation.__name__
-                    if hasattr(annotation, "__name__")
-                    else str(annotation)
-                )
-                fields[field_name] = EventFieldSpec(
-                    type=type_str,
-                    required=field_info.is_required(),
-                )
-
-            events.append(
-                EventSpec(
-                    name=evt_cls.__name__,
-                    code=evt_code,
-                    fields=fields,
-                )
-            )
+        steps, event_types = collect_steps(cls)
+        events, event_deps = collect_events(event_types)
 
         state_type = cls._state_type
         try:
             state_code = inspect.getsource(state_type)
         except OSError:
             state_code = None
-        dependencies.extend(extract_dependencies(state_type))
 
         cls_module = inspect.getmodule(cls)
         try:
             cls_code = inspect.getsource(cls)
         except OSError:
             cls_code = None
-        dependencies.extend(extract_dependencies(cls))
-        dependencies = list(dict.fromkeys(dependencies))
+
+        imports = list(
+            dict.fromkeys(
+                event_deps + extract_imports(state_type) + extract_imports(cls)
+            )
+        )
 
         manifest = WorkflowManifest(
             id_=str(uuid.uuid5(uuid.NAMESPACE_DNS, cls.__name__)),
@@ -339,17 +259,20 @@ class Workflow:
                 steps=steps,
                 events=events,
                 dependencies=DependenciesSpec(
-                    imports=dependencies,
-                    packages=resolve_dependency_packages(dependencies),
+                    imports=imports,
+                    packages=resolve_packages(imports),
                 ),
             ),
         )
 
+        raw = manifest.model_dump()
+        raw["checksum"] = compute_checksum(raw)
+
         if path is not None:
             with open(path, "w", encoding="utf-8") as f:
-                json.dump(manifest.model_dump(), f, indent=2)
+                json.dump(raw, f, indent=2)
 
-        return manifest.model_dump()
+        return raw
 
     def get_steps_for_event(self, event: Event) -> list[tuple[str, Any]]:
         """Get all step methods that handle the given event type."""
