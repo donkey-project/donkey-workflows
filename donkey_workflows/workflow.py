@@ -1,3 +1,4 @@
+import hashlib
 import inspect
 import json
 import uuid
@@ -347,11 +348,19 @@ class Workflow:
             ),
         )
 
+        # Compute SHA-256 over the full manifest
+        raw = manifest.model_dump()
+        digest = hashlib.sha256(
+            json.dumps(raw, sort_keys=True, default=str).encode()
+        ).hexdigest()
+        manifest.checksum = f"sha256:{digest}"
+        raw["checksum"] = manifest.checksum
+
         if path is not None:
             with open(path, "w", encoding="utf-8") as f:
-                json.dump(manifest.model_dump(), f, indent=2)
+                json.dump(raw, f, indent=2)
 
-        return manifest.model_dump()
+        return raw
 
     def get_steps_for_event(self, event: Event) -> list[tuple[str, Any]]:
         """Get all step methods that handle the given event type."""

@@ -50,4 +50,5 @@ class WorkflowManifest(BaseModel):
     name: str
     module: str | None = None
     description: str = ""
+    checksum: str | None = None
     data: WorkflowSpec
